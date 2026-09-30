@@ -1,0 +1,235 @@
+/* =====================================================================
+   Reference application chrome
+   The workspace frame: a sidebar that recedes, a slim topbar, and pages
+   that carry their own rhythm.
+   ===================================================================== */
+
+.app-workspace {
+  display: flex;
+  min-width: 0;
+  /* The shell's scroll container is a block box, so the workspace has to claim
+     the full height itself for the sidebar to reach the bottom. */
+  min-height: 100%;
+  background: var(--color-page);
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A quiet bar: breadcrumb on the left, the few global controls on the right. */
+.app-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  height: var(--topbar-height);
+  padding-inline: var(--space-12) var(--space-8);
+}
+
+.app-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-13);
+  color: var(--color-text-tertiary);
+}
+
+.app-breadcrumb__crumb {
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-breadcrumb__crumb:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.app-breadcrumb__current { color: var(--color-text); font-weight: var(--weight-medium); }
+.app-breadcrumb__sep { color: var(--color-text-muted); }
+
+.app-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* On small screens the sidebar becomes an overlay sheet. */
+.app-sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-dialog) - 1);
+  background: var(--color-overlay);
+  animation: ds-fade var(--duration-fast) var(--ease);
+}
+
+@media (max-width: 900px) {
+  .app-workspace > .ds-sidebar {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: var(--z-dialog);
+    box-shadow: var(--shadow-dialog);
+  }
+  .app-workspace[data-sidebar="closed"] > .ds-sidebar { display: none; }
+}
+
+@media (min-width: 901px) {
+  .app-workspace[data-sidebar="closed"] > .ds-sidebar { display: none; }
+  .app-sidebar-scrim { display: none; }
+}
+
+/* ---------------------------------------------------------------- stats */
+
+/*
+ * Figures, not tiles. Separated by space and a single hairline rule rather
+ * than four bordered boxes.
+ */
+.app-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-40);
+  padding-block-end: var(--space-20);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.app-stat { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.app-stat__label {
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+}
+
+.app-stat__value {
+  font-size: var(--text-24);
+  font-weight: var(--weight-semibold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-stat__hint { font-size: var(--text-12); color: var(--color-text-tertiary); }
+
+/* ----------------------------------------------------------------- list */
+
+/* A hairline-separated list. The default way to show a small collection. */
+.app-list { display: flex; flex-direction: column; }
+
+.app-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding-block: var(--space-8);
+  min-height: 40px;
+}
+
+.app-list__row + .app-list__row { border-block-start: 1px solid var(--color-border-subtle); }
+
+.app-list__text { flex: 1; min-width: 0; }
+.app-list__title { font-size: var(--text-14); }
+.app-list__meta { font-size: var(--text-12); color: var(--color-text-tertiary); }
+
+.app-list__trailing {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-13);
+  color: var(--color-text-tertiary);
+}
+
+/* ------------------------------------------------------------ inspector */
+
+.app-example {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding-block: var(--space-6);
+  min-height: 32px;
+}
+
+.app-example + .app-example { border-block-start: 1px solid var(--color-border-subtle); }
+
+.app-example__code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------- design-system gallery */
+
+.specimen { display: flex; flex-direction: column; gap: var(--space-12); }
+
+.specimen__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.specimen__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-12);
+}
+
+.specimen__label {
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+}
+
+.specimen__frame {
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.swatch { display: flex; flex-direction: column; gap: var(--space-6); }
+
+.swatch__chip {
+  height: 44px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.swatch__token {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  color: var(--color-text-muted);
+}
+
+.type-specimen {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-16);
+  padding-block: var(--space-6);
+}
+
+.type-specimen + .type-specimen { border-block-start: 1px solid var(--color-border-subtle); }
+
+.type-specimen__meta {
+  flex: none;
+  width: 108px;
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  color: var(--color-text-muted);
+}
+
+.space-specimen { display: flex; align-items: center; gap: var(--space-12); padding-block: 3px; }
+.space-specimen__bar { height: 8px; background: var(--color-accent-soft); border-radius: 2px; }
+.space-specimen__meta {
+  width: 108px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  color: var(--color-text-muted);
+}

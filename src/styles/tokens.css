@@ -1,0 +1,338 @@
+/*
+ * Design tokens.
+ *
+ * The grammar of this system is: typography → spacing → layout → hairlines →
+ * minimal surfaces → small accents. Tokens are named for that grammar, so a
+ * component that consumes them inherits the visual language automatically.
+ *
+ * Two conventions worth knowing:
+ *
+ * 1. Spacing tokens are named for their pixel value (`--space-12` is 12px).
+ *    Nothing is picked by feel.
+ * 2. Interaction states are translucent ink scrims, not solid colours, so a
+ *    hover composes correctly over the page, the sidebar or a menu alike.
+ */
+:root {
+  /* ---- ink ----------------------------------------------------------
+     One warm near-black, expressed at different alphas. Everything textual
+     and every neutral state derives from it, which is what keeps the greys
+     from drifting apart. */
+  --ink: 52 50 46;              /* #34322e */
+  --ink-inverse: 247 246 243;
+
+  /* ---- surfaces ------------------------------------------------------
+     The page is the lightest thing on screen. Chrome sits slightly darker so
+     the sidebar recedes. Pure white is reserved for surfaces that float. */
+  --color-page: #fdfcfa;
+  --color-chrome: #f6f5f2;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f2f1ed;
+
+  --color-surface-hover: rgb(var(--ink) / 0.055);
+  --color-surface-active: rgb(var(--ink) / 0.09);
+  --color-surface-selected: rgb(var(--ink) / 0.055);
+  --color-overlay: rgb(var(--ink) / 0.28);
+
+  /* ---- text ---------------------------------------------------------- */
+  --color-text: rgb(var(--ink) / 1);
+  --color-text-secondary: rgb(var(--ink) / 0.72);
+  --color-text-tertiary: rgb(var(--ink) / 0.52);
+  --color-text-muted: rgb(var(--ink) / 0.40);
+  --color-text-disabled: rgb(var(--ink) / 0.26);
+  --color-text-inverse: rgb(var(--ink-inverse) / 1);
+
+  /* ---- borders -------------------------------------------------------
+     Hairlines. A border should be felt before it is seen. */
+  --color-border-subtle: rgb(var(--ink) / 0.06);
+  --color-border: rgb(var(--ink) / 0.11);
+  --color-border-strong: rgb(var(--ink) / 0.18);
+
+  /* ---- accent --------------------------------------------------------
+     One restrained ink-blue. It marks selection, focus and the single
+     primary action on a page. It is never page decoration. */
+  --color-accent: #3a6ea8;
+  --color-accent-hover: #2f5c8e;
+  --color-accent-contrast: #ffffff;
+  --color-accent-soft: rgb(58 110 168 / 0.10);
+  --color-accent-border: rgb(58 110 168 / 0.32);
+  --color-accent-text: #2f5c8e;
+
+  /* ---- semantic ------------------------------------------------------
+     Muted, and always usable as text / background / border together. */
+  --color-danger: #a8443a;
+  --color-danger-text: #96392f;
+  --color-danger-soft: rgb(168 68 58 / 0.09);
+  --color-danger-border: rgb(168 68 58 / 0.26);
+
+  --color-warning: #97671f;
+  --color-warning-text: #8a5d18;
+  --color-warning-soft: rgb(151 103 31 / 0.10);
+  --color-warning-border: rgb(151 103 31 / 0.24);
+
+  --color-success: #4a7c4e;
+  --color-success-text: #416f45;
+  --color-success-soft: rgb(74 124 78 / 0.10);
+  --color-success-border: rgb(74 124 78 / 0.24);
+
+  --color-info: var(--color-accent-text);
+  --color-info-soft: var(--color-accent-soft);
+  --color-info-border: var(--color-accent-border);
+
+  /* ---- agent ---------------------------------------------------------
+     A muted plum, used only to mark what the agent touched: a 2px rule, a
+     small label, a brief outline. Never a fill, never a glow. */
+  --color-agent: #6b5f97;
+  --color-agent-text: #5e5388;
+  --color-agent-soft: rgb(107 95 151 / 0.09);
+  --color-agent-border: rgb(107 95 151 / 0.30);
+
+  /* ---- type ----------------------------------------------------------
+     System-first: the platform UI face is the most legible thing available
+     and costs no network request. */
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+
+  /* A restrained scale. Nine steps, and the top of it is a page title. */
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;   /* UI default */
+  --text-15: 15px;   /* reading default */
+  --text-16: 16px;
+  --text-18: 18px;
+  --text-20: 20px;
+  --text-24: 24px;
+  --text-30: 30px;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-tight: -0.012em;
+  --tracking-normal: 0;
+
+  /* ---- space ---------------------------------------------------------
+     Named for pixels. Use the scale; do not invent values. */
+  --space-0: 0;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* ---- shape ---------------------------------------------------------
+     Small radii. Anything larger needs a reason. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-full: 999px;
+
+  /* ---- elevation -----------------------------------------------------
+     Only things that genuinely float get a shadow. There is deliberately no
+     "card shadow" token. */
+  --shadow-popover:
+    0 0 0 1px rgb(var(--ink) / 0.05),
+    0 2px 4px rgb(var(--ink) / 0.05),
+    0 8px 20px rgb(var(--ink) / 0.09);
+  --shadow-dialog:
+    0 0 0 1px rgb(var(--ink) / 0.06),
+    0 6px 16px rgb(var(--ink) / 0.08),
+    0 20px 48px rgb(var(--ink) / 0.14);
+
+  /* ---- focus ---------------------------------------------------------
+     Visible without being heavier than the control it marks. */
+  --focus-ring: 0 0 0 2px var(--color-page), 0 0 0 3.5px var(--color-accent-border);
+  --focus-ring-inset: inset 0 0 0 1px var(--color-accent),
+    0 0 0 2.5px var(--color-accent-soft);
+
+  /* ---- controls ------------------------------------------------------ */
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --row-height: 28px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 18px;
+
+  /* ---- motion --------------------------------------------------------
+     Short enough to feel mechanical rather than animated. */
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0.13, 1);
+
+  /* ---- layout --------------------------------------------------------
+     Measure-driven content widths, plus the app frame. */
+  --width-narrow: 44rem;
+  --width-medium: 56rem;
+  --width-wide: 76rem;
+  --sidebar-width: 232px;
+  --topbar-height: 44px;
+  --page-gutter: var(--space-48);
+  --agent-panel-min: 300px;
+  --agent-panel-max: 640px;
+  --z-popover: 80;
+  --z-dialog: 100;
+  --z-toast: 120;
+}
+
+/* ---- dark ------------------------------------------------------------
+   Same grammar, inverted. The page stays the lightest surface in the
+   content area and chrome stays darker, so the sidebar still recedes. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ink: 233 231 226;
+    --ink-inverse: 26 25 24;
+
+    --color-page: #1c1b19;
+    --color-chrome: #161514;
+    --color-surface: #232220;
+    --color-surface-sunken: #141312;
+
+    --color-surface-hover: rgb(var(--ink) / 0.055);
+    --color-surface-active: rgb(var(--ink) / 0.10);
+    --color-surface-selected: rgb(var(--ink) / 0.07);
+    --color-overlay: rgb(10 10 9 / 0.62);
+
+    --color-text: rgb(var(--ink) / 0.92);
+    --color-text-secondary: rgb(var(--ink) / 0.66);
+    --color-text-tertiary: rgb(var(--ink) / 0.48);
+    --color-text-muted: rgb(var(--ink) / 0.36);
+    --color-text-disabled: rgb(var(--ink) / 0.24);
+
+    --color-border-subtle: rgb(var(--ink) / 0.07);
+    --color-border: rgb(var(--ink) / 0.13);
+    --color-border-strong: rgb(var(--ink) / 0.22);
+
+    --color-accent: #7ba6d9;
+    --color-accent-hover: #9cbee6;
+    --color-accent-contrast: #16202c;
+    --color-accent-soft: rgb(123 166 217 / 0.14);
+    --color-accent-border: rgb(123 166 217 / 0.36);
+    --color-accent-text: #9cbee6;
+
+    --color-danger: #d18a7f;
+    --color-danger-text: #dd9d92;
+    --color-danger-soft: rgb(209 138 127 / 0.13);
+    --color-danger-border: rgb(209 138 127 / 0.30);
+
+    --color-warning: #d1a662;
+    --color-warning-text: #dcb476;
+    --color-warning-soft: rgb(209 166 98 / 0.13);
+    --color-warning-border: rgb(209 166 98 / 0.28);
+
+    --color-success: #8bb98f;
+    --color-success-text: #9cc4a0;
+    --color-success-soft: rgb(139 185 143 / 0.13);
+    --color-success-border: rgb(139 185 143 / 0.28);
+
+    --color-agent: #a99bd6;
+    --color-agent-text: #b6aade;
+    --color-agent-soft: rgb(169 155 214 / 0.13);
+    --color-agent-border: rgb(169 155 214 / 0.32);
+
+    --shadow-popover:
+      0 0 0 1px rgb(0 0 0 / 0.4),
+      0 2px 4px rgb(0 0 0 / 0.3),
+      0 8px 20px rgb(0 0 0 / 0.4);
+    --shadow-dialog:
+      0 0 0 1px rgb(0 0 0 / 0.45),
+      0 6px 16px rgb(0 0 0 / 0.35),
+      0 20px 48px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* The same dark values, applied explicitly rather than by media query. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink: 233 231 226;
+  --ink-inverse: 26 25 24;
+
+  --color-page: #1c1b19;
+  --color-chrome: #161514;
+  --color-surface: #232220;
+  --color-surface-sunken: #141312;
+
+  --color-surface-hover: rgb(var(--ink) / 0.055);
+  --color-surface-active: rgb(var(--ink) / 0.10);
+  --color-surface-selected: rgb(var(--ink) / 0.07);
+  --color-overlay: rgb(10 10 9 / 0.62);
+
+  --color-text: rgb(var(--ink) / 0.92);
+  --color-text-secondary: rgb(var(--ink) / 0.66);
+  --color-text-tertiary: rgb(var(--ink) / 0.48);
+  --color-text-muted: rgb(var(--ink) / 0.36);
+  --color-text-disabled: rgb(var(--ink) / 0.24);
+
+  --color-border-subtle: rgb(var(--ink) / 0.07);
+  --color-border: rgb(var(--ink) / 0.13);
+  --color-border-strong: rgb(var(--ink) / 0.22);
+
+  --color-accent: #7ba6d9;
+  --color-accent-hover: #9cbee6;
+  --color-accent-contrast: #16202c;
+  --color-accent-soft: rgb(123 166 217 / 0.14);
+  --color-accent-border: rgb(123 166 217 / 0.36);
+  --color-accent-text: #9cbee6;
+
+  --color-danger: #d18a7f;
+  --color-danger-text: #dd9d92;
+  --color-danger-soft: rgb(209 138 127 / 0.13);
+  --color-danger-border: rgb(209 138 127 / 0.30);
+
+  --color-warning: #d1a662;
+  --color-warning-text: #dcb476;
+  --color-warning-soft: rgb(209 166 98 / 0.13);
+  --color-warning-border: rgb(209 166 98 / 0.28);
+
+  --color-success: #8bb98f;
+  --color-success-text: #9cc4a0;
+  --color-success-soft: rgb(139 185 143 / 0.13);
+  --color-success-border: rgb(139 185 143 / 0.28);
+
+  --color-agent: #a99bd6;
+  --color-agent-text: #b6aade;
+  --color-agent-soft: rgb(169 155 214 / 0.13);
+  --color-agent-border: rgb(169 155 214 / 0.32);
+
+  --shadow-popover:
+    0 0 0 1px rgb(0 0 0 / 0.4),
+    0 2px 4px rgb(0 0 0 / 0.3),
+    0 8px 20px rgb(0 0 0 / 0.4);
+  --shadow-dialog:
+    0 0 0 1px rgb(0 0 0 / 0.45),
+    0 6px 16px rgb(0 0 0 / 0.35),
+    0 20px 48px rgb(0 0 0 / 0.5);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Compact density tightens rhythm without changing any component's code. */
+:root[data-density="compact"] {
+  --row-height: 24px;
+  --control-md: 26px;
+  --control-lg: 30px;
+  --page-gutter: var(--space-32);
+}
