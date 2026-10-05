@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { AgentElementMetadata, AgentOption } from "../types/metadata";
+import type { QuerySchema } from "../types/query";
 import type { AgentElementState } from "../types/state";
 import type { AgentTargetHandlers, AgentTargetRegistration } from "../types/registry";
 import { useOptionalAgent } from "./useAgent";
@@ -11,6 +12,8 @@ export interface UseAgentTargetConfig<V = unknown>
   id?: string;
   handlers: AgentTargetHandlers<V>;
   options?: AgentOption[];
+  /** Declares what can be queried against this target, when anything can. */
+  querySchema?: QuerySchema;
   visible?: boolean;
   enabled?: boolean;
   getState?: () => Partial<Omit<AgentElementState, "id" | "capabilities">>;
@@ -81,6 +84,7 @@ export function useAgentTarget<V = unknown, E extends HTMLElement = HTMLElement>
     dialog: scope.dialog,
     handlers: Object.keys(config.handlers).sort(),
     data: config.data,
+    querySchema: config.querySchema,
   });
 
   const registration = useMemo<AgentTargetRegistration<V> | null>(() => {
@@ -139,6 +143,7 @@ export function useAgentTarget<V = unknown, E extends HTMLElement = HTMLElement>
       sensitive: meta.sensitive,
       requiresConfirmation: meta.requiresConfirmation,
       data: meta.data,
+      querySchema: meta.querySchema,
       page: scope.page,
       dialog: scope.dialog,
       handlers,

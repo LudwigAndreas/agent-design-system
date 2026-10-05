@@ -26,6 +26,12 @@ application chose to publish.
   dialogs: [{ id: "dialog.delete-accounts", open: false, title: "Delete 3 accounts?" }],
   notifications: [ /* what the user can currently see */ ],
   routes: [ /* where navigation is permitted */ ],
+  contextReferences: [
+    { id: "current-user", description: "The signed-in user. Use for 'mine'.",
+      type: "reference", entity: "user" }
+  ],
+  queryLocale: { dateOrder: "DMY", locale: "en-GB" },
+  stagedOperations: [{ id: "stg_1", label: "Export matching accounts", status: "staged" }],
   capturedAt: 1735603200000
 }
 ```
@@ -49,6 +55,35 @@ const stale = context.state;        // ← a lie by this point
 This is the synchronisation requirement: if the user manually disables dark mode
 while the agent is enabling it, the agent finds out because it re-reads a single
 source of truth instead of remembering what it asked for.
+
+## Query schemas
+
+A query-capable element carries a `querySchema` describing every queryable
+field: id, label, type, permitted operators, enum values, and the entity a
+reference points at.
+
+```ts
+{
+  id: "accounts.table",
+  value: { kind: "and", predicates: [ /* the active query */ ] },
+  querySchema: {
+    entity: "account",
+    fields: [
+      { id: "createdAt", label: "Created", type: "date" },
+      { id: "approver", label: "Approver", type: "reference",
+        entity: "user", lookupBy: ["email"] }
+    ]
+  },
+  data: { rowCount: 3, rowIds: [...], selectedIds: [] }
+}
+```
+
+Its absence is meaningful: a field not in the schema is not queryable, and
+there is no other way to discover one. See [queries](queries.md).
+
+`contextReferences` and `queryLocale` sit at the top level because they apply to
+every query: what the application will resolve, and how it reads ambiguous
+literals.
 
 ## Live values
 

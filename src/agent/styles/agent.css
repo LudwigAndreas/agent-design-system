@@ -564,3 +564,79 @@
 .agent-demo__entry--cancelled { color: var(--color-text-muted); }
 .agent-demo__entry-glyph { flex: none; width: 10px; color: var(--color-text-muted); }
 .agent-demo__entry-spacer { flex: 1; }
+
+/* -------------------------------------------------------- staged operation */
+
+/*
+ * The one place besides a confirmation that gets a container, for the same
+ * reason: it is waiting on the user.
+ */
+.agent-staged {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  background: var(--color-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.agent-staged--stale { border-color: var(--color-warning-border); }
+.agent-staged--failed { border-color: var(--color-danger-border); }
+
+.agent-staged__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+}
+
+.agent-staged__title {
+  font-size: var(--text-14);
+  font-weight: var(--weight-medium);
+}
+
+.agent-staged__description {
+  font-size: var(--text-13);
+  line-height: var(--leading-snug);
+  color: var(--color-text-secondary);
+}
+
+.agent-staged__inputs {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4) var(--space-12);
+  font-size: var(--text-13);
+}
+
+.agent-staged__inputs dt { color: var(--color-text-muted); }
+.agent-staged__inputs dd { color: var(--color-text); }
+
+.agent-staged__stale { font-size: var(--text-12); color: var(--color-warning-text); }
+.agent-staged__error { font-size: var(--text-12); color: var(--color-danger-text); }
+
+.agent-staged__done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-8);
+  font-size: var(--text-13);
+}
+
+.agent-staged__resolved { font-size: var(--text-12); color: var(--color-text-muted); }
+
+.agent-staged__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  padding-block-start: var(--space-2);
+}
+
+.agent-staged__running {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-13);
+  color: var(--color-text-tertiary);
+}

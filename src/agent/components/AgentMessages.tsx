@@ -20,6 +20,7 @@ import type {
   UserMessage,
 } from "../types/messages";
 import { AgentActionPreview } from "./AgentActionPreview";
+import { AgentStagedOperation } from "./AgentStagedOperation";
 import { Markdown } from "./Markdown";
 
 /**
@@ -182,6 +183,16 @@ function ActionMessageView({ message }: { message: ActionMessage }) {
   const agent = useAgent();
   const canUndo = Boolean(message.result?.undo) && !message.undone;
   const failed = message.status === "failed";
+
+  // A staged operation renders from the live store, so the row reflects what
+  // has happened to it since — stale, run, discarded — rather than freezing
+  // at the moment it was prepared.
+  if (message.stagedId) {
+    const operation = agent.stagedOperations.find(
+      (candidate) => candidate.id === message.stagedId,
+    );
+    if (operation) return <AgentStagedOperation operation={operation} />;
+  }
 
   return (
     <div

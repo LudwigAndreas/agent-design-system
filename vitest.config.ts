@@ -23,5 +23,9 @@ export default defineConfig({
     environmentOptions: { jsdom: { url: "http://localhost:5173" } },
     setupFiles: ["./vitest.setup.ts"],
     css: false,
+    // `ref/` holds reference checkouts of other libraries. Their suites are
+    // not ours to run and their configs are not ours to satisfy.
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["**/node_modules/**", "ref/**", "dist/**"],
   },
 });

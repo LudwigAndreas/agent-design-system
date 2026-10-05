@@ -3,10 +3,13 @@ import { AgentContext } from "../../agent/components/AgentContext";
 import { AgentActionPreview } from "../../agent/components/AgentActionPreview";
 import { AgentMessageView } from "../../agent/components/AgentMessages";
 import { AgentSpotlight } from "../../agent/components/AgentSpotlight";
+import { AgentStagedOperation } from "../../agent/components/AgentStagedOperation";
 import { AgentSuggestions } from "../../agent/components/AgentSuggestions";
 import { useAgent } from "../../agent/hooks/useAgent";
 import type { AgentMessage } from "../../agent/types/messages";
 import type { ResolvedAgentAction } from "../../agent/types/actions";
+import type { QueryPredicate, QuerySchema } from "../../agent/types/query";
+import type { StagedOperation } from "../../agent/types/staged";
 import { Button } from "../../design-system/Button";
 import { Checkbox } from "../../design-system/Checkbox";
 import { DataTable, Toolbar, ToolbarSpacer } from "../../design-system/DataTable";
@@ -24,6 +27,7 @@ import {
 import { Input } from "../../design-system/Input";
 import { Menu } from "../../design-system/Menu";
 import { Page } from "../../design-system/Page";
+import { QueryChips } from "../../design-system/QueryChips";
 import {
   Avatar,
   Badge,
@@ -81,6 +85,7 @@ export function DesignSystemPage() {
           <Containers />
           <Navigation />
           <States />
+          <Queries />
           <AgentSurfaces />
         </Page.Content>
       </Page>
@@ -852,6 +857,89 @@ function States() {
   );
 }
 
+/* ----------------------------------------------------------------- queries */
+
+const DEMO_SCHEMA: QuerySchema = {
+  entity: "account",
+  fields: [
+    { id: "name", label: "Name", type: "string" },
+    {
+      id: "status",
+      label: "Status",
+      type: "enum",
+      values: [{ value: "active", label: "Active" }],
+    },
+    { id: "createdAt", label: "Created", type: "date" },
+    { id: "approver", label: "Approver", type: "reference", entity: "user", lookupBy: ["email"] },
+  ],
+};
+
+function Queries() {
+  const [query, setQuery] = useState<QueryPredicate>({
+    kind: "and",
+    predicates: [
+      { kind: "compare", field: "createdAt", op: "lt", value: "2025-09-11" },
+      { kind: "compare", field: "status", op: "eq", value: "active" },
+      { kind: "compare", field: "name", op: "contains", value: "north" },
+    ],
+  });
+
+  return (
+    <SettingsSection
+      id="queries"
+      title="Queries"
+      description="The active query, as removable conditions. A condition the agent added and one the user composed render identically, because there is one predicate model rather than two."
+    >
+      <Stack gap={16}>
+        <div className="specimen__frame">
+          <QueryChips
+            query={query}
+            schema={DEMO_SCHEMA}
+            onQueryChange={(next) => setQuery(next)}
+          />
+          {query.kind === "and" && query.predicates.length === 0 ? (
+            <EmptyState
+              title="No conditions"
+              description="Every condition has been removed."
+              action={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    setQuery({
+                      kind: "compare",
+                      field: "status",
+                      op: "eq",
+                      value: "active",
+                    })
+                  }
+                >
+                  Add one back
+                </Button>
+              }
+            />
+          ) : null}
+        </div>
+
+        <Stack gap={6}>
+          <p className="specimen__label">What the agent fills in</p>
+          <pre
+            style={{
+              padding: "var(--space-12)",
+              background: "var(--color-surface-sunken)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "var(--text-11)",
+              overflowX: "auto",
+            }}
+          >
+            {JSON.stringify(query, null, 2)}
+          </pre>
+        </Stack>
+      </Stack>
+    </SettingsSection>
+  );
+}
+
 /* ------------------------------------------------------------ agent surfaces */
 
 const DEMO_ACTION: ResolvedAgentAction = {
@@ -915,6 +1003,76 @@ const DEMO_MESSAGES: AgentMessage[] = [
     role: "assistant",
     text: "Done — email notifications are now **off**.",
     createdAt: 0,
+  },
+];
+
+const DEMO_SUMMARY = {
+  title: "Export matching accounts",
+  description: "Prepare a spreadsheet of the accounts matching the current query.",
+  predicate: {
+    kind: "and" as const,
+    predicates: [
+      {
+        kind: "compare" as const,
+        field: "createdAt",
+        label: "Created",
+        op: "lt" as const,
+        value: "2025-09-11",
+        display: "11 September 2025",
+      },
+      {
+        kind: "compare" as const,
+        field: "approver",
+        label: "Approver",
+        op: "eq" as const,
+        value: "usr_1",
+        display: "Priya Raman",
+      },
+    ],
+  },
+  matchCount: 4,
+};
+
+const DEMO_STAGED: StagedOperation[] = [
+  {
+    id: "stg_ready",
+    actionId: "a1",
+    target: "accounts.export",
+    label: "Export matching accounts",
+    summary: DEMO_SUMMARY,
+    status: "staged",
+    fingerprint: "f1",
+    stagedAt: 0,
+  },
+  {
+    id: "stg_stale",
+    actionId: "a2",
+    target: "accounts.export",
+    label: "Export matching accounts",
+    summary: { ...DEMO_SUMMARY, matchCount: 10 },
+    status: "stale",
+    fingerprint: "f2",
+    stagedAt: 0,
+    staleReason:
+      "The query this was prepared against has changed. Running it now will use the current one.",
+  },
+  {
+    id: "stg_done",
+    actionId: "a3",
+    target: "accounts.export",
+    label: "Export matching accounts",
+    summary: DEMO_SUMMARY,
+    status: "completed",
+    fingerprint: "f3",
+    stagedAt: 0,
+    result: {
+      message: "Exported 4 accounts",
+      artifact: {
+        filename: "accounts-2026-10-02.csv",
+        mediaType: "text/csv",
+        url: "#",
+      },
+    },
   },
 ];
 
@@ -995,6 +1153,20 @@ function AgentSurfaces() {
             />
           </div>
         </Stack>
+      </div>
+
+      <div style={{ marginBlockStart: "var(--space-24)" }}>
+        <p className="specimen__label" style={{ marginBlockEnd: "var(--space-8)" }}>
+          Staged operations — prepared by the agent, run by you
+        </p>
+        <div
+          className="specimen__grid"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}
+        >
+          {DEMO_STAGED.map((operation) => (
+            <AgentStagedOperation key={operation.id} operation={operation} />
+          ))}
+        </div>
       </div>
 
       <div style={{ marginBlockStart: "var(--space-24)" }}>

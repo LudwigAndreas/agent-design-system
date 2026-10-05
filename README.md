@@ -34,6 +34,7 @@ works with no API key. Try:
 - *Change the notification frequency to weekly.*
 - *Show me accounts that haven't logged in for 30 days.*
 - *Delete the selected accounts.* (asks first)
+- *All accounts created before 11.09.2025 that are mine, in my unit, approved by priya@northwind.example — export them.*
 - *Turn on SMS notifications.* (the application refuses — watch it report honestly)
 
 The **Inspector** page shows every executed action and the exact semantic state
@@ -105,6 +106,16 @@ effect** before reporting success.
 a clear separation between "ask the user" (design system) and "is this allowed"
 (application).
 
+**Queries** — a view publishes a schema; the agent fills it with a typed
+predicate that is validated before anything runs. Values may be references the
+application resolves (`me`, `my unit`, an email address) rather than literals,
+so the agent never handles identity. The same predicate drives the visible
+query UI, so the user can read and correct whatever the agent built.
+
+**Staged operations** — a third outcome beside execute and confirm: the agent
+prepares expensive or artifact-producing work and hands the trigger to the
+user, with staleness detection if the inputs move underneath it.
+
 **Chat** — streaming, markdown that never becomes HTML, code blocks, citations,
 tool execution, action rows, inline confirmations, errors, retry, stop,
 regenerate, attachments, contextual suggestions.
@@ -133,6 +144,7 @@ model (Claude, OpenAI, or your own).
 | [navigation](docs/agent/navigation.md) | Navigate, reveal, focus, spotlight, dialogs |
 | [confirmation](docs/agent/confirmation.md) | Policy, previews, lifecycle, undo |
 | [security](docs/agent/security.md) | The trust boundary and prompt injection |
+| [queries](docs/agent/queries.md) | Query schemas, predicates, value resolution, staging |
 | [adapters](docs/agent/adapters.md) | The provider seam, and wiring a real model |
 | [accessibility](docs/agent/accessibility.md) | Rules for agent-driven change |
 | [examples](docs/agent/examples.md) | Five worked scenarios, including failures |

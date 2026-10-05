@@ -15,15 +15,19 @@ in confirmation previews) and an `ActionSource`.
 | `select-option` | `write` | Choose one of the target's published options. |
 | `check` / `uncheck` | `write` | Booleans, spelled for checkboxes. |
 | `search` | `write` | Write a query string. |
-| `filter` | `write` | Write a structured filter object. |
+| `filter` | `write` | Apply a structured predicate. See [queries](queries.md). |
 | `submit` | `submit` | Submit a form or committing control. |
 | `focus` | `focus` | Scroll to, spotlight **and** focus. |
 | `reveal` / `scroll-to` | `focus` | Scroll to and spotlight without taking focus. |
 | `invoke` | `invoke` | Run a page-declared named action. |
 
-`search`, `filter`, `toggle`, `check`, `uncheck` and `select-option` are all
-normalised to a single target value before the write, so a component only ever
-implements `read` and `write`.
+`search`, `toggle`, `check`, `uncheck` and `select-option` are all normalised to
+a single target value before the write, so a component only ever implements
+`read` and `write`.
+
+`filter` takes the same path but is checked first: the predicate is validated
+against the target's query schema and its value references are resolved before
+anything is applied. A target with no schema is not queryable at all.
 
 ## Results
 
@@ -36,6 +40,8 @@ result.value         // the value observed AFTER the write
 result.previousValue // what it was before
 result.error?.code   // machine-readable failure
 result.undo?.()      // present only when genuinely reversible
+result.matchCount    // records matching, after a query was applied
+result.staged        // the prepared operation, when status is "staged"
 ```
 
 `execute` never throws for a rejected action. Failure is data.
@@ -52,6 +58,22 @@ result.undo?.()      // present only when genuinely reversible
 | `cancelled` | The user declined. | Accept it and move on. |
 | `execution-failed` | The handler threw. | Report the application's error. |
 | `unsupported-action` | No navigation delegate, or unknown type. | Report the limitation. |
+| `invalid-query` | The predicate failed schema validation. | Read `error.problems`; each names what would have been valid. |
+| `unresolved-reference` | A context reference or lookup did not resolve. | Report it; do not substitute a guess. |
+| `requires-user-trigger` | Tried to run a staged operation. | Tell the user it is ready. Only they can run it. |
+
+## Outcomes
+
+Beyond success and failure there is a third:
+
+| Status | Meaning |
+| --- | --- |
+| `succeeded` / `failed` | The work was attempted and this is what happened. |
+| `cancelled` | The user declined a confirmation. Nothing changed. |
+| `staged` | **Prepared, not performed.** It waits for the user and may never run. |
+
+A staged result is not a success. Describing it as done is the one thing the
+agent must not do — see [queries](queries.md#staged-operations).
 
 ## Extending the protocol
 

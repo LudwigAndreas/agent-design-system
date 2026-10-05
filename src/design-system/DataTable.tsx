@@ -1,5 +1,11 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useAgentTarget } from "../agent/hooks/useAgentTarget";
+import {
+  EMPTY_PREDICATE,
+  type QueryField,
+  type QueryPredicate,
+  type QuerySchema,
+} from "../agent/types/query";
 import { Checkbox } from "./Checkbox";
 import {
   cx,
@@ -16,19 +22,35 @@ export interface Column<Row> {
   cell: (row: Row) => ReactNode;
   numeric?: boolean;
   width?: string;
+  /**
+   * How this column can be queried.
+   *
+   * `false` makes the column non-queryable, which is also the default when a
+   * table declares no `query` at all. Anything else is merged over a default
+   * derived from the column: its id, its header as a label, and `number` or
+   * `string` inferred from `numeric` — so a queryable column usually needs
+   * only `{ query: true }` or a type.
+   */
+  query?: boolean | Partial<Omit<QueryField, "id">>;
 }
 
 export interface DataTableProps<Row> extends AgentAwareProps {
   rows: Row[];
   columns: Column<Row>[];
   rowKey: (row: Row) => string;
-  /** Current filter. Becomes the agent-readable value of this target. */
-  filter?: Record<string, unknown>;
-  onFilterChange?: ChangeHandler<Record<string, unknown>>;
+  /**
+   * The active query. Becomes the agent-readable value of this target, and
+   * is what the condition chips render.
+   */
+  query?: QueryPredicate;
+  onQueryChange?: ChangeHandler<QueryPredicate>;
+  /**
+   * Declares what is queryable. Omit to derive it from the columns marked
+   * `query`; omit both and the table is simply not queryable.
+   */
+  querySchema?: QuerySchema;
   selectedIds?: string[];
   onSelectionChange?: ChangeHandler<string[]>;
-  /** Rejects filters the application does not understand. */
-  validateFilter?: (filter: Record<string, unknown>) => string | void;
   emptyMessage?: ReactNode;
   caption?: string;
   toolbar?: ReactNode;
@@ -44,11 +66,11 @@ export function DataTable<Row>({
   rows,
   columns,
   rowKey,
-  filter,
-  onFilterChange,
+  query,
+  onQueryChange,
+  querySchema,
   selectedIds,
   onSelectionChange,
-  validateFilter,
   emptyMessage = "Nothing to show.",
   caption,
   toolbar,
@@ -60,12 +82,21 @@ export function DataTable<Row>({
   const selectable = Boolean(onSelectionChange);
   const selected = selectedIds ?? [];
 
-  const { ref, targetProps } = useAgentTarget<Record<string, unknown>, HTMLDivElement>({
+  // A derived schema is usually enough: authoring cost is what decides
+  // whether this survives across many tables.
+  const schema = useMemo(
+    () => querySchema ?? deriveSchema(columns),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by shape
+    [querySchema, JSON.stringify(columns.map((column) => [column.id, column.numeric, column.query]))],
+  );
+
+  const { ref, targetProps } = useAgentTarget<QueryPredicate, HTMLDivElement>({
     ...meta,
+    // Presence of a schema is what makes the target query-capable.
+    querySchema: schema,
     handlers: {
-      read: () => filter ?? {},
-      write: onFilterChange ? (next) => onFilterChange(next, AGENT_CHANGE) : undefined,
-      validate: (next) => validateFilter?.(next as Record<string, unknown>),
+      read: () => query ?? EMPTY_PREDICATE,
+      write: onQueryChange ? (next) => onQueryChange(next, AGENT_CHANGE) : undefined,
     },
     getState: () => ({
       state: `${rows.length} row${rows.length === 1 ? "" : "s"}`,
@@ -159,6 +190,29 @@ export function DataTable<Row>({
       </div>
     </div>
   );
+}
+
+/**
+ * Builds a query schema from the columns that opted in.
+ *
+ * The default is deliberately useful — id, header as label, type inferred
+ * from `numeric` — so declaring a queryable column costs one word. Returns
+ * undefined when nothing opted in, which leaves the table non-queryable
+ * rather than guessing.
+ */
+export function deriveSchema<Row>(columns: Column<Row>[]): QuerySchema | undefined {
+  const fields = columns.flatMap((column): QueryField[] => {
+    if (!column.query) return [];
+    const base = {
+      id: column.id,
+      label: typeof column.header === "string" ? column.header : column.id,
+      type: column.numeric ? ("number" as const) : ("string" as const),
+    };
+    if (column.query === true) return [base];
+    return [{ ...base, ...column.query } as QueryField];
+  });
+
+  return fields.length > 0 ? { fields } : undefined;
 }
 
 export function Toolbar({ children }: { children: ReactNode }) {

@@ -1,4 +1,5 @@
 import type { AgentCapability, AgentOption, AgentTargetId } from "./metadata";
+import type { AgentContextReference, AgentQueryLocale, QuerySchema } from "./query";
 
 /**
  * The agent's view of the UI. Deliberately semantic: no DOM nodes, no class
@@ -20,6 +21,12 @@ export interface AgentElementState {
   capabilities: AgentCapability[];
   sensitive?: boolean;
   requiresConfirmation?: boolean;
+  /**
+   * What can be queried against this target. Present only on targets that
+   * accept a query; a field absent from the schema is not queryable, and
+   * there is no other way to discover one.
+   */
+  querySchema?: QuerySchema;
   /** The page context this element is nested in, when any. */
   page?: string;
   data?: Record<string, unknown>;
@@ -50,7 +57,24 @@ export interface AgentDeclaredAction {
   description?: string;
   destructive?: boolean;
   requiresConfirmation?: boolean;
-  params?: Record<string, { type: string; description?: string; required?: boolean }>;
+  /**
+   * The operation is prepared rather than performed, and the user triggers
+   * it. Use for work that is expensive, slow, or produces an artifact.
+   */
+  stages?: boolean;
+  /**
+   * The target whose current query this operation runs against. Makes the
+   * staged summary showable and gives staleness a precise definition.
+   */
+  queryTarget?: AgentTargetId;
+  params?: Record<string, AgentActionParam>;
+}
+
+export interface AgentActionParam {
+  /** `predicate` means the parameter takes a query against the page's data. */
+  type: "string" | "number" | "boolean" | "predicate";
+  description?: string;
+  required?: boolean;
 }
 
 export interface AgentPageState {
@@ -75,5 +99,14 @@ export interface AgentReadableState {
   notifications: AgentNotificationState[];
   /** Routes the agent is allowed to navigate to. */
   routes: { id: string; title?: string; description?: string }[];
+  /**
+   * References the application will resolve inside a predicate — the current
+   * user, their unit. The agent names them; it never learns their values.
+   */
+  contextReferences: AgentContextReference[];
+  /** How the application reads ambiguous literals, notably numeric dates. */
+  queryLocale?: AgentQueryLocale;
+  /** Operations prepared by the agent and awaiting the user. */
+  stagedOperations: { id: string; label: string; status: string }[];
   capturedAt: number;
 }

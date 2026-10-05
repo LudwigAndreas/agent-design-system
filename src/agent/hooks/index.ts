@@ -1,5 +1,6 @@
 export { useAgent, useOptionalAgent } from "./useAgent";
 export { useAgentAction, type UseAgentActionResult } from "./useAgentAction";
+export { useAgentQuery } from "./useAgentQuery";
 export { useAgentNavigation, type UseAgentNavigationResult } from "./useAgentNavigation";
 export {
   AgentPageScopeContext,

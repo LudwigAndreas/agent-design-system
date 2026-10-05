@@ -69,6 +69,21 @@ npm run build       # tsc -b && vite build
 15. **Do not create page-specific agent APIs when a reusable semantic
     abstraction is possible.** Reach for a declared `invoke` action before
     inventing a new action type.
+16. **The agent never writes a query language.** A queryable view publishes a
+    schema; the agent fills it with a structured predicate. Validation runs
+    before resolution, resolution before the write, and a rejection names what
+    would have been valid.
+17. **One predicate model serves both actors.** The query the agent applies and
+    the one the user composes are the same object, rendered as chips the user
+    can remove. Never add an agent-only query path.
+18. **The agent names references; the application resolves them.** `me`, `my
+    unit`, an email address — the agent must never learn an identity to build a
+    correct query, and only the display label comes back.
+19. **Resolve ambiguity visibly.** An interpreted date is rendered with the
+    month named, everywhere the query is shown, before anything consequential
+    happens.
+20. **Expensive, slow or artifact-producing work stages.** The agent prepares
+    it; only the user runs it. A staged result is not a success.
 
 ## Conventions
 
@@ -88,7 +103,8 @@ npm run build       # tsc -b && vite build
   (`onCheckedChange={(v) => setX(v)}`) must keep working.
 - Agent-layer behaviour needs a test. `src/agent/__tests__` covers the registry,
   the runtime lifecycle, the conversation reducer, React integration, markdown
-  safety and the shell.
+  safety, the shell, query validation, value resolution, predicate rendering,
+  staged operations, and the end-to-end acceptance scenario.
 
 ## Traps
 
@@ -100,3 +116,10 @@ npm run build       # tsc -b && vite build
   acting; the user may have changed something.
 - Policy decides *whether to ask*, never whether something is permitted.
   Authorization goes in the target's `validate` or the declared action's `run`.
+- A schema field with no matching accessor in the application's evaluator is a
+  silent bug. The two are halves of one contract.
+- `lt` is false for a missing value. "No sign-in for 30 days" needs
+  `or isEmpty`, or it quietly excludes accounts that never signed in.
+- The registry keeps a target's resolved query across re-registration, because
+  React re-registers on every description change. Do not tie per-target state
+  to the registration instance.

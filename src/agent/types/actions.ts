@@ -1,4 +1,6 @@
 import type { AgentTargetId } from "./metadata";
+import type { QueryPredicate, QueryProblem } from "./query";
+import type { StagedOperation } from "./staged";
 
 /**
  * Who asked for a state change. Preserved end-to-end so the UI can say
@@ -89,8 +91,12 @@ export interface SearchAction extends AgentActionBase {
 export interface FilterAction extends AgentActionBase {
   type: "filter";
   target: AgentTargetId;
-  /** Application-defined filter shape. Validated by the target, not here. */
-  filter: Record<string, unknown>;
+  /**
+   * A structured predicate, validated against the target's query schema
+   * before anything is applied. There is no untyped form: a query the schema
+   * cannot describe is a query the application will not run.
+   */
+  filter: QueryPredicate;
 }
 
 /** A named, page-declared action from `AgentContext`'s `actions` list. */
@@ -143,6 +149,11 @@ export type AgentActionStatus =
   | "validated"
   | "awaiting-confirmation"
   | "executing"
+  /**
+   * Prepared, and waiting for the user to trigger it. Terminal for the
+   * agent's turn: the work has not been done and may never be.
+   */
+  | "staged"
   | "succeeded"
   | "failed"
   | "cancelled";
@@ -157,7 +168,13 @@ export type AgentActionErrorCode =
   | "cancelled"
   | "state-not-confirmed"
   | "execution-failed"
-  | "unsupported-action";
+  | "unsupported-action"
+  /** The predicate did not match the target's query schema. */
+  | "invalid-query"
+  /** A context reference or directory lookup in the predicate did not resolve. */
+  | "unresolved-reference"
+  /** The agent tried to trigger an operation only the user may trigger. */
+  | "requires-user-trigger";
 
 export interface AgentActionError {
   code: AgentActionErrorCode;
@@ -165,6 +182,11 @@ export interface AgentActionError {
   /** Safe to show the user as-is. */
   userMessage?: string;
   cause?: unknown;
+  /**
+   * Per-problem detail for a rejected query, so the agent can correct the
+   * specific field rather than guess at the whole predicate.
+   */
+  problems?: QueryProblem[];
 }
 
 export interface AgentActionResult {
@@ -179,6 +201,13 @@ export interface AgentActionResult {
   error?: AgentActionError;
   /** Present only when the action is genuinely reversible. */
   undo?: () => Promise<AgentActionResult>;
+  /**
+   * Present when `status` is `staged`: the prepared operation, awaiting a
+   * trigger from the user.
+   */
+  staged?: StagedOperation;
+  /** Number of records matching, after a query was applied. */
+  matchCount?: number;
 }
 
 /** An entry in the audit log the demo panel and undo affordances read from. */

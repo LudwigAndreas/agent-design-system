@@ -72,6 +72,12 @@ export interface ActionMessage extends AgentMessageBase {
   result?: AgentActionResult;
   /** True once undo has been used, so the affordance can retire. */
   undone?: boolean;
+  /**
+   * Set when the action staged an operation. The row renders from the live
+   * staged store by this id, so its status stays current as the operation
+   * goes stale, runs or is discarded.
+   */
+  stagedId?: string;
 }
 
 export interface ConfirmationMessage extends AgentMessageBase {

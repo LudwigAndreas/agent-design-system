@@ -6,7 +6,7 @@ import { IconChevronRight } from "../../design-system/icons";
 import { Page } from "../../design-system/Page";
 import { Badge, KeyValue, Stack } from "../../design-system/primitives";
 import { SettingsSection } from "../../design-system/Section";
-import { daysSince, filterAccounts, useAppStore } from "../state/store";
+import { daysSince, dormantPredicate, queryAccounts, useAppStore } from "../state/store";
 
 export interface DashboardPageProps {
   onNavigate: (route: string) => void;
@@ -16,7 +16,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { state } = useAppStore();
   const { accounts, settings, audit } = state;
 
-  const dormant = filterAccounts(accounts, { status: "all", inactiveDays: 30, search: "" });
+  // The same predicate model the table and the agent use.
+  const dormant = queryAccounts(accounts, dormantPredicate(30));
   const suspended = accounts.filter((account) => account.status === "suspended");
   const seats = accounts.reduce((total, account) => total + account.seats, 0);
   const firstName = settings.profile.name.split(" ")[0];

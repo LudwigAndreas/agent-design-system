@@ -8,6 +8,15 @@ export { createAgentEventBus } from "./core/eventBus";
 export { createAgentRegistry, resolveAction, type CreateRegistryOptions } from "./core/registry";
 export { createAgentRuntime, type AgentNavigation, type AgentRuntime } from "./core/runtime";
 export { composePolicy, defaultAgentPolicy } from "./core/policy";
+export {
+  describeCondition,
+  describeConditions,
+  describeMatchCount,
+  describePredicate,
+} from "./core/query/describe";
+export { interpretDate, resolvePredicate } from "./core/query/resolve";
+export { operatorsFor, validatePredicate } from "./core/query/validate";
+export { createStagedStore, fingerprintInputs } from "./core/staged";
 export { buildActionPreview } from "./core/preview";
 export {
   ACTION_CAPABILITY,
@@ -55,6 +64,10 @@ export {
 export { AgentDemoPanel } from "./components/AgentDemoPanel";
 export { AgentMessageView } from "./components/AgentMessages";
 export { AgentSpotlight, type AgentSpotlightProps } from "./components/AgentSpotlight";
+export {
+  AgentStagedOperation,
+  type AgentStagedOperationProps,
+} from "./components/AgentStagedOperation";
 export {
   AgentStatusRegion,
   type AgentStatusRegionProps,

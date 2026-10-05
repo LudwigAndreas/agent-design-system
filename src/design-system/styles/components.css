@@ -1050,3 +1050,44 @@
 }
 
 .ds-kv__key { color: var(--color-text-tertiary); }
+
+/* ----------------------------------------------------------------- chips */
+
+/*
+ * The active query, one chip per condition. Quiet: a query is context for
+ * the data, not a control panel above it.
+ */
+.ds-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  padding-block-end: var(--space-12);
+}
+
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 22px;
+  padding-inline: var(--space-8) var(--space-4);
+  font-size: var(--text-12);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.ds-chip__text { white-space: nowrap; }
+
+.ds-chip__remove {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background-color var(--duration-instant) var(--ease);
+}
+
+.ds-chip__remove:hover { background: var(--color-surface-active); color: var(--color-text); }

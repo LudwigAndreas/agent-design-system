@@ -14,7 +14,13 @@ import type {
   AgentTargetRegistration,
   AgentUIRegistry,
 } from "../types/registry";
+import type { QueryPredicate, QueryProblem, ResolvedPredicate } from "../types/query";
+import { isPredicate, toPlainPredicate } from "../types/query";
+
 import { ACTION_CAPABILITY, resolveCapabilities, supportsCapability } from "./capabilities";
+import { describePredicate } from "./query/describe";
+import { resolvePredicate } from "./query/resolve";
+import { validatePredicate } from "./query/validate";
 
 let actionSeq = 0;
 const nextActionId = () => `act_${Date.now().toString(36)}_${(actionSeq++).toString(36)}`;
@@ -35,6 +41,39 @@ function fail(
 ): AgentActionResult {
   const error: AgentActionError = { code, message, userMessage: userMessage ?? message };
   return { success: false, action, status: "failed", error, message: error.userMessage };
+}
+
+/**
+ * A rejected query. The problems travel with the error so the agent can fix
+ * the specific field rather than re-guess the whole predicate.
+ */
+function failQuery(
+  action: ResolvedAgentAction,
+  code: "invalid-query" | "unresolved-reference",
+  problems: QueryProblem[],
+): AgentActionResult {
+  const summary = problems.map((problem) => problem.message).join(" ");
+  return {
+    success: false,
+    action,
+    status: "failed",
+    message: summary,
+    error: { code, message: summary, userMessage: summary, problems },
+  };
+}
+
+/**
+ * Describes a predicate the application put in effect itself. It arrives
+ * unresolved, so it is run back through preparation purely to get labels and
+ * display values — nothing is applied.
+ */
+async function describeObserved(
+  registry: AgentUIRegistry,
+  target: string,
+  observed: unknown,
+): Promise<ResolvedPredicate | undefined> {
+  const preparation = await registry.prepareQuery(target, observed);
+  return preparation.ok ? preparation.resolved : undefined;
 }
 
 /** How long to wait for React to commit an agent-initiated write. */
@@ -87,6 +126,11 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
   const verifyTimeoutMs = options.verifyTimeoutMs ?? VERIFY_TIMEOUT_MS;
 
   const targets = new Map<string, AgentTargetRegistration<any>>();
+  /**
+   * The last resolved predicate applied to each target, kept so previews and
+   * staged summaries can show "Priya Raman" rather than an opaque id.
+   */
+  const lastResolved = new Map<string, ResolvedPredicate>();
   const pages = new Map<string, AgentPageRegistration>();
   const dialogs = new Map<string, AgentDialogRegistration>();
   const routes = new Map<string, AgentRouteRegistration>();
@@ -122,6 +166,9 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
       capabilities,
       sensitive: registration.sensitive,
       requiresConfirmation: registration.requiresConfirmation,
+      // Present only on query-capable targets: its absence is what tells the
+      // agent there is nothing to query here.
+      querySchema: registration.querySchema,
       page: registration.page,
       data: live.data ?? registration.data,
     };
@@ -141,6 +188,10 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
         // Guard against a re-register having already replaced us.
         if (targets.get(registration.id) === registration) {
           targets.delete(registration.id);
+          // `lastResolved` is deliberately kept: it belongs to the target id,
+          // not to this registration. React re-registers a target whenever
+          // its description changes, and dropping the resolved query there
+          // would lose the display values on every re-render.
           notify();
         }
       };
@@ -199,6 +250,42 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
       return registration ? elementState(registration) : undefined;
     },
 
+    getResolvedQuery: (id) => lastResolved.get(id),
+
+    async prepareQuery(target, predicate) {
+      const registration = targets.get(target);
+      const schema = registration?.querySchema;
+      if (!registration || !schema) {
+        return {
+          ok: false,
+          code: "not-queryable",
+          problems: [
+            {
+              code: "not-a-predicate",
+              message: `"${target}" does not declare a query schema, so it cannot be queried.`,
+            },
+          ],
+        };
+      }
+
+      const problems = validatePredicate(predicate, {
+        schema,
+        contextReferences: environment.getContextReferences?.() ?? [],
+      });
+      if (problems.length > 0) return { ok: false, code: "invalid-query", problems };
+
+      const resolution = await resolvePredicate(predicate as QueryPredicate, {
+        schema,
+        locale: environment.getQueryLocale?.(),
+        describeValue: environment.describeValue,
+        resolveContext: environment.resolveContext,
+        lookupEntity: environment.lookupEntity,
+      });
+      return resolution.ok
+        ? { ok: true, resolved: resolution.predicate }
+        : { ok: false, code: "unresolved-reference", problems: resolution.problems };
+    },
+
     getReadableState(): AgentReadableState {
       const location = environment.getRoute?.() ?? { route: "unknown" };
       const pageList = [...pages.values()].map(({ handlers: _h, ...rest }) => rest);
@@ -211,11 +298,14 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
         dialogs: registry.getDialogs(),
         notifications: environment.getNotifications?.() ?? [],
         routes: [...routes.values()],
+        contextReferences: environment.getContextReferences?.() ?? [],
+        queryLocale: environment.getQueryLocale?.(),
+        stagedOperations: environment.getStagedOperations?.() ?? [],
         capturedAt: Date.now(),
       };
     },
 
-    async execute(rawAction): Promise<AgentActionResult> {
+    async execute(rawAction, options): Promise<AgentActionResult> {
       const action = resolveAction(rawAction);
 
       // `navigate` is the one action routed to the host router rather than to a
@@ -387,6 +477,102 @@ export function createAgentRegistry(options: CreateRegistryOptions = {}): AgentU
             };
           }
 
+          case "filter": {
+            // A query is a value write like any other, but its value has to
+            // be checked against the target's schema first. Nothing here
+            // touches application state until the predicate is known good.
+            const schema = registration.querySchema;
+            if (!schema) {
+              return fail(
+                action,
+                "capability-unsupported",
+                `Target "${action.target}" does not declare a query schema.`,
+                `"${state.label ?? action.target}" can't be queried.`,
+              );
+            }
+
+            // The runtime usually prepares the query before confirmation, so
+            // lookups are not repeated here. Preparing again is harmless for
+            // a direct caller.
+            let resolved = options?.prepared;
+            if (!resolved) {
+              const preparation = await registry.prepareQuery(action.target, action.filter);
+              if (!preparation.ok) {
+                return failQuery(
+                  action,
+                  preparation.code === "unresolved-reference"
+                    ? "unresolved-reference"
+                    : "invalid-query",
+                  preparation.problems,
+                );
+              }
+              resolved = preparation.resolved;
+            }
+
+            const predicate = toPlainPredicate(resolved);
+            lastResolved.set(action.target, resolved);
+            await handlers.write?.(predicate as never);
+
+            if (handlers.read) {
+              const { confirmed, observed } = await verifyValue(
+                handlers.read,
+                predicate,
+                verifyTimeoutMs,
+              );
+              if (!confirmed) {
+                // The application narrowed, replaced or refused the query.
+                // Report what is actually in effect, never what was asked for.
+                const effective = isPredicate(observed)
+                  ? describePredicate(
+                      await describeObserved(registry, action.target, observed),
+                    )
+                  : "";
+                return {
+                  ...fail(
+                    action,
+                    "state-not-confirmed",
+                    `Applied a query to "${action.target}" but the application reports a ` +
+                      `different one in effect${effective ? `: ${effective}` : ""}.`,
+                    effective
+                      ? `The application changed the query. What is in effect now: ${effective}.`
+                      : `I applied a query to "${state.label ?? action.target}", but the ` +
+                        `application changed it.`,
+                  ),
+                  value: observed,
+                  previousValue,
+                  matchCount: (registration.getState?.()?.data?.rowCount as number) ?? undefined,
+                };
+              }
+            }
+
+            const after = registration.getState?.() ?? {};
+            const matchCount = (after.data?.rowCount as number | undefined) ?? undefined;
+
+            return {
+              success: true,
+              action,
+              status: "succeeded",
+              message:
+                matchCount === undefined
+                  ? `Applied a query to ${state.label ?? action.target}`
+                  : `${matchCount} record${matchCount === 1 ? "" : "s"} match`,
+              value: handlers.read?.() ?? predicate,
+              previousValue,
+              matchCount,
+              undo:
+                previousValue === undefined
+                  ? undefined
+                  : () =>
+                      registry.execute({
+                        type: "filter",
+                        target: action.target,
+                        filter: previousValue as QueryPredicate,
+                        source: "system",
+                        reason: `Undo of ${action.id}`,
+                      }),
+            };
+          }
+
           default: {
             // Everything else is a value write, normalised to a target value.
             const desired = desiredValue(action, previousValue, state);
@@ -512,8 +698,6 @@ function desiredValue(
       return { value: false };
     case "search":
       return { value: action.query };
-    case "filter":
-      return { value: action.filter };
     case "select-option": {
       const options = state.options;
       if (options && options.length > 0) {

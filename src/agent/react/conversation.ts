@@ -267,6 +267,24 @@ function applyEvent(state: ConversationState, event: AgentEvent): ConversationSt
         ),
       };
 
+    case "action-staged":
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: nextMessageId("staged"),
+            role: "action",
+            action: event.action,
+            status: "staged",
+            label: event.operation.label,
+            stagedId: event.operation.id,
+            turnId: event.turnId,
+            createdAt: Date.now(),
+          } satisfies ActionMessage,
+        ],
+      };
+
     case "action-started":
       return {
         ...state,

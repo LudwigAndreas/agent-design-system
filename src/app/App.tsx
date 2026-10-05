@@ -31,6 +31,13 @@ import { DesignSystemPage } from "./pages/DesignSystemPage";
 import { DeveloperPage } from "./pages/DeveloperPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { DEFAULT_ROUTE, ROUTES, isRouteId, topLevel } from "./routes";
+import {
+  CONTEXT_REFERENCES,
+  QUERY_LOCALE,
+  describeAccountValue,
+  lookupDirectory,
+  resolveAccountContext,
+} from "./state/accountQuery";
 import { AppStoreProvider, useAppStore } from "./state/store";
 
 /**
@@ -54,6 +61,12 @@ export function App() {
 function AgentHost() {
   const [route, setRoute] = useState<string>(DEFAULT_ROUTE);
   const toast = useNotifications();
+  const { state: appState } = useAppStore();
+
+  // Resolution reads live application state, so a reference resolved mid-turn
+  // reflects the user's current identity rather than a snapshot.
+  const appStateRef = useRef(appState);
+  appStateRef.current = appState;
 
   // The adapter is the only provider-specific object in the whole tree.
   const adapter = useMemo(() => createLocalAgentAdapter(), []);
@@ -109,6 +122,10 @@ function AgentHost() {
     // Opening a dialog is not consequential in itself — whatever is inside it is.
     if (action.type === "open-dialog") return { requiresConfirmation: false };
 
+    // The export stages, and the staged block is already a decision point.
+    // Asking twice for one non-destructive preparation is friction, not care.
+    if (target === "accounts.export") return { requiresConfirmation: false };
+
     if (element?.id === "notifications.reset") {
       return {
         requiresConfirmation: true,
@@ -125,6 +142,16 @@ function AgentHost() {
       getRoute: () => ({ route: routeRef.current }),
       navigate: (target: string) => navigate(target),
       getNotifications: () => toast.toAgentState(),
+
+      // What the application will resolve inside a query, and how it reads
+      // ambiguous literals. The agent names these; it never sees their values.
+      getContextReferences: () => CONTEXT_REFERENCES,
+      getQueryLocale: () => QUERY_LOCALE,
+      resolveContext: (id: string) => resolveAccountContext(appStateRef.current, id),
+      describeValue: (entity: string, value: unknown) =>
+        describeAccountValue(appStateRef.current, entity, value),
+      lookupEntity: (entity: string, by: string, value: string) =>
+        lookupDirectory(appStateRef.current, entity, by, value),
     }),
     [navigate, toast],
   );

@@ -6,6 +6,17 @@ if (!Element.prototype.scrollIntoView) {
 }
 
 /**
+ * jsdom implements Blob but not object URLs, so anything that hands the user
+ * a generated file would throw. A counter-backed stub is enough: tests assert
+ * that a download is offered, not what it points at.
+ */
+if (typeof URL.createObjectURL !== "function") {
+  let objectUrlSeq = 0;
+  URL.createObjectURL = () => `blob:test/${objectUrlSeq++}`;
+  URL.revokeObjectURL = () => {};
+}
+
+/**
  * This jsdom setup does not expose Web Storage, so the shell's persistence
  * behaviour would be untestable. A minimal in-memory implementation is enough:
  * the production code only ever does getItem/setItem inside try/catch.

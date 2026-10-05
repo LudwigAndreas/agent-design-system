@@ -4,7 +4,7 @@ import "./styles/components.css";
 
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
-export { DataTable, Toolbar, ToolbarSpacer } from "./DataTable";
+export { DataTable, deriveSchema, Toolbar, ToolbarSpacer } from "./DataTable";
 export type { Column, DataTableProps } from "./DataTable";
 export { Dialog, type DialogProps } from "./Dialog";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
@@ -19,6 +19,7 @@ export {
   type NotificationsApi,
 } from "./Notifications";
 export { Page, type PageProps, type PageWidth } from "./Page";
+export { QueryChips, type QueryChipsProps } from "./QueryChips";
 export {
   Avatar,
   Badge,

@@ -14,6 +14,7 @@ import type { AgentEvent, AgentEventBus } from "../types/events";
 import type { AgentAttachment } from "../types/messages";
 import type { AgentPolicyResolver } from "../types/policy";
 import type { AgentReadableState } from "../types/state";
+import type { StagedOperation } from "../types/staged";
 import type { AgentRegistryEnvironment, AgentUIRegistry } from "../types/registry";
 import { createAgentEventBus } from "../core/eventBus";
 import { createAgentRegistry } from "../core/registry";
@@ -54,6 +55,12 @@ export interface AgentContextValue {
 
   getState(): AgentReadableState;
   history: AgentActionRecord[];
+
+  /** Operations the agent prepared and the user has not yet run. */
+  stagedOperations: StagedOperation[];
+  /** Runs a staged operation. Only reachable from the UI, never the agent. */
+  triggerStaged(id: string): Promise<AgentActionResult>;
+  discardStaged(id: string): void;
 
   /** Target currently spotlighted by the agent, if any. */
   spotlightTarget?: string;
@@ -118,6 +125,7 @@ export function AgentProvider({
   const [announcement, setAnnouncement] = useState("");
   const [spotlightTarget, setSpotlightTarget] = useState<string | undefined>();
   const [history, setHistory] = useState<AgentActionRecord[]>([]);
+  const [stagedOperations, setStagedOperations] = useState<StagedOperation[]>([]);
 
   const spotlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const abortRef = useRef<AbortController>(undefined);
@@ -163,14 +171,36 @@ export function AgentProvider({
 
   // Bridge the application's router/state into registry snapshots.
   useEffect(() => {
+    // Every hook is forwarded through the ref, so the application may hand
+    // over fresh closures on each render without re-registering anything.
     registry.setEnvironment({
       getRoute: () => environmentRef.current?.getRoute?.() ?? { route: "unknown" },
       getNotifications: () => environmentRef.current?.getNotifications?.() ?? [],
       navigate: (target, params) => environmentRef.current?.navigate?.(target, params),
+      getContextReferences: () => environmentRef.current?.getContextReferences?.() ?? [],
+      getQueryLocale: () => environmentRef.current?.getQueryLocale?.(),
+      resolveContext: (id) =>
+        environmentRef.current?.resolveContext?.(id) ?? {
+          ok: false,
+          reason: "this application resolves no context references",
+        },
+      describeValue: (entity, value) => environmentRef.current?.describeValue?.(entity, value),
+      lookupEntity: (entity, by, value) =>
+        environmentRef.current?.lookupEntity?.(entity, by, value) ?? {
+          ok: false,
+          reason: "unsupported",
+        },
     });
   }, [registry]);
 
-  useEffect(() => runtime.subscribe(() => setHistory(runtime.getHistory())), [runtime]);
+  useEffect(
+    () =>
+      runtime.subscribe(() => {
+        setHistory(runtime.getHistory());
+        setStagedOperations(runtime.getStagedOperations());
+      }),
+    [runtime],
+  );
 
   // The bus drives the transcript for everything state-related.
   useEffect(
@@ -190,6 +220,12 @@ export function AgentProvider({
           setAnnouncement(`Agent is asking you to confirm: ${event.preview.title}.`);
         } else if (event.type === "navigation-completed") {
           setAnnouncement(`Agent navigated to ${event.route}.`);
+        } else if (event.type === "action-staged") {
+          setAnnouncement(
+            `Agent prepared ${event.operation.label}. It is waiting for you to run it.`,
+          );
+        } else if (event.type === "staged-updated" && event.operation.status === "completed") {
+          setAnnouncement(event.operation.result?.message ?? `${event.operation.label} finished.`);
         }
       }),
     [events],
@@ -296,6 +332,9 @@ export function AgentProvider({
       reveal: runtime.reveal,
       getState: () => registry.getReadableState(),
       history,
+      stagedOperations,
+      triggerStaged: (id) => runtime.triggerStaged(id, "user"),
+      discardStaged: (id) => runtime.discardStaged(id),
       spotlightTarget,
       spotlight,
       clearSpotlight,
@@ -310,6 +349,7 @@ export function AgentProvider({
       conversation,
       runTurn,
       history,
+      stagedOperations,
       spotlightTarget,
       spotlight,
       clearSpotlight,

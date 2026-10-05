@@ -5,6 +5,7 @@ import type {
   ResolvedAgentAction,
 } from "./actions";
 import type { AgentReadableState } from "./state";
+import type { StagedOperation } from "./staged";
 
 /**
  * Provider-neutral event stream. An adapter yields these; the UI renders them.
@@ -83,6 +84,19 @@ export interface AgentActionCancelled extends AgentEventBase {
   action: ResolvedAgentAction;
 }
 
+/** The agent prepared an operation; it now waits for the user. */
+export interface AgentActionStaged extends AgentEventBase {
+  type: "action-staged";
+  action: ResolvedAgentAction;
+  operation: StagedOperation;
+}
+
+/** A staged operation changed: triggered, completed, failed, or discarded. */
+export interface AgentStagedUpdated extends AgentEventBase {
+  type: "staged-updated";
+  operation: StagedOperation;
+}
+
 export interface AgentConfirmationRequired extends AgentEventBase {
   type: "confirmation-required";
   action: ResolvedAgentAction;
@@ -145,6 +159,8 @@ export interface AgentEventMap {
   "action-completed": AgentActionCompleted;
   "action-failed": AgentActionFailed;
   "action-cancelled": AgentActionCancelled;
+  "action-staged": AgentActionStaged;
+  "staged-updated": AgentStagedUpdated;
   "confirmation-required": AgentConfirmationRequired;
   "confirmation-resolved": AgentConfirmationResolved;
   "navigation-started": AgentNavigationStarted;

@@ -1,5 +1,14 @@
 import { useState } from "react";
 import { AgentContext } from "../../agent/components/AgentContext";
+import {
+  EMPTY_PREDICATE,
+  addComparison,
+  comparisons,
+  isEmptyPredicate,
+  removeComparisonAt,
+  type ComparisonPredicate,
+  type QueryPredicate,
+} from "../../agent/types/query";
 import { Button } from "../../design-system/Button";
 import { DataTable, Toolbar, ToolbarSpacer, type Column } from "../../design-system/DataTable";
 import { Dialog } from "../../design-system/Dialog";
@@ -9,10 +18,13 @@ import { Input } from "../../design-system/Input";
 import { Menu } from "../../design-system/Menu";
 import { Page } from "../../design-system/Page";
 import { Badge } from "../../design-system/primitives";
+import { QueryChips } from "../../design-system/QueryChips";
 import { Select } from "../../design-system/Select";
 import { useNotifications } from "../../design-system/Notifications";
-import { daysSince, useAppStore } from "../state/store";
-import type { Account, AccountFilter, AccountStatus } from "../state/types";
+import { ACCOUNT_QUERY_SCHEMA } from "../state/accountQuery";
+import { exportAccounts } from "../state/exportAccounts";
+import { daysSince, dormantPredicate, useAppStore } from "../state/store";
+import type { Account, AccountStatus } from "../state/types";
 
 const STATUS_TONE: Record<AccountStatus, "success" | "warning" | "danger"> = {
   active: "success",
@@ -27,19 +39,53 @@ const INACTIVE_OPTIONS = [
   { value: "90", label: "No sign-in for 90 days" },
 ];
 
+/** Reads a single-condition value out of the query, for the toolbar controls. */
+function conditionValue(query: QueryPredicate, field: string): string | undefined {
+  const match = comparisons(query).find((leaf) => leaf.field === field);
+  return typeof match?.value === "string" ? match.value : undefined;
+}
+
+/** Conjoins two predicates, flattening when the left is already a conjunction. */
+function conjoin(left: QueryPredicate, right: QueryPredicate): QueryPredicate {
+  if (isEmptyPredicate(left)) return right;
+  if (left.kind === "and") return { kind: "and", predicates: [...left.predicates, right] };
+  return { kind: "and", predicates: [left, right] };
+}
+
 /**
- * The data screen. Filtering, selection and deletion are all exposed as agent
- * capabilities, with deletion declared as a destructive action so the runtime
- * requires a confirmed preview before it runs.
+ * Replaces every condition on a field, then adds the new one.
+ *
+ * The toolbar controls are a shorthand over the predicate, not a second
+ * filter model: setting the status dropdown edits the same tree the agent
+ * writes and the chips render.
+ */
+function setCondition(
+  query: QueryPredicate,
+  field: string,
+  comparison: ComparisonPredicate | null,
+): QueryPredicate {
+  let next = query;
+  for (let index = comparisons(next).length - 1; index >= 0; index -= 1) {
+    if (comparisons(next)[index]?.field === field) {
+      next = removeComparisonAt(next, index);
+    }
+  }
+  return comparison ? addComparison(next, comparison) : next;
+}
+
+/**
+ * The data screen. Querying, selection and deletion are all exposed as agent
+ * capabilities, with deletion declared destructive and export declared as
+ * staging, so the runtime asks before one and hands the other to the user.
  */
 export function AccountsPage() {
   const { state, dispatch, visibleAccounts } = useAppStore();
   const toast = useNotifications();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const { accountFilter: filter, selectedAccountIds: selected } = state;
+  const { accountQuery: query, selectedAccountIds: selected } = state;
 
-  const setFilter = (next: Partial<AccountFilter>, source: "user" | "agent" | "system") =>
-    dispatch({ type: "set-account-filter", filter: next, source });
+  const setQuery = (next: QueryPredicate, source: "user" | "agent" | "system") =>
+    dispatch({ type: "set-account-query", query: next, source });
 
   const deleteSelected = (source: "user" | "agent") => {
     const count = selected.length;
@@ -54,12 +100,68 @@ export function AccountsPage() {
     });
   };
 
-  const filtered = filter.inactiveDays > 0 || filter.status !== "all" || filter.search.trim();
+  // One export, reached from the toolbar button and from the agent's staged
+  // operation alike.
+  const runExport = () =>
+    exportAccounts(visibleAccounts, { directory: state.directory, units: state.units });
+
+  const exportNow = () => {
+    try {
+      const outcome = runExport();
+      toast.notify({
+        tone: "success",
+        title: outcome.message,
+        description: outcome.artifact?.filename,
+        source: "user",
+        action: outcome.artifact
+          ? {
+              label: "Download",
+              onClick: () => {
+                const link = document.createElement("a");
+                link.href = outcome.artifact!.url;
+                link.download = outcome.artifact!.filename;
+                link.click();
+              },
+            }
+          : undefined,
+      });
+    } catch (error) {
+      toast.notify({
+        tone: "danger",
+        title: "Export failed",
+        description: error instanceof Error ? error.message : String(error),
+        source: "user",
+      });
+    }
+  };
+
+  const statusValue = conditionValue(query, "status") ?? "all";
+  const inactiveValue = (() => {
+    const leaf = comparisons(query).find(
+      (candidate) => candidate.field === "lastLoginAt" && candidate.op === "lt",
+    );
+    if (!leaf || typeof leaf.value !== "string") return "0";
+    const days = Math.round((Date.now() - Date.parse(leaf.value)) / 86_400_000);
+    return INACTIVE_OPTIONS.some((option) => option.value === String(days)) ? String(days) : "0";
+  })();
+
+  /** The dormant shorthand writes the same disjunction the agent would. */
+  const setDormant = (days: number, source: "user" | "agent" | "system") => {
+    let next = query;
+    for (let index = comparisons(next).length - 1; index >= 0; index -= 1) {
+      if (comparisons(next)[index]?.field === "lastLoginAt") {
+        next = removeComparisonAt(next, index);
+      }
+    }
+    setQuery(days === 0 ? next : conjoin(next, dormantPredicate(days)), source);
+  };
+  const searchValue = conditionValue(query, "name") ?? "";
 
   const columns: Column<Account>[] = [
     {
       id: "name",
       header: "Account",
+      query: { type: "string", label: "Name" },
       cell: (account) => (
         <>
           <div className="ds-table__primary">{account.name}</div>
@@ -85,7 +187,7 @@ export function AccountsPage() {
     },
     { id: "seats", header: "Seats", numeric: true, cell: (account) => account.seats },
     {
-      id: "lastLogin",
+      id: "lastLoginAt",
       header: "Last sign-in",
       numeric: true,
       cell: (account) => {
@@ -104,12 +206,20 @@ export function AccountsPage() {
       description="Customer accounts and their activity"
       context={
         `${state.accounts.length} accounts in total, ${visibleAccounts.length} matching the ` +
-        "current filter. The filter accepts `status` (all, active, invited, suspended), " +
-        "`inactiveDays` (0 disables the rule; accounts that have never signed in always " +
-        "count as inactive) and `search` (matches name, owner, email or id). Deleting " +
-        "accounts is permanent and cannot be undone."
+        "current query. Query the table through `accounts.table` using its published " +
+        "schema. Use the `current-user` reference for 'mine' and `current-user-unit` for " +
+        "'my unit'; compare owner or approver to an email with a lookup. Deleting " +
+        "accounts is permanent. Exporting prepares a file and hands it to the user."
       }
       actions={[
+        {
+          id: "accounts.export",
+          label: "Export matching accounts",
+          description: "Prepare a spreadsheet of the accounts matching the current query.",
+          stages: true,
+          queryTarget: "accounts.table",
+          run: runExport,
+        },
         {
           id: "accounts.delete-selected",
           label: "Delete selected accounts",
@@ -133,16 +243,16 @@ export function AccountsPage() {
           },
         },
         {
-          id: "accounts.clear-filter",
-          label: "Clear the account filter",
-          description: "Remove every filter and show all accounts.",
-          run: () => setFilter({ status: "all", inactiveDays: 0, search: "" }, "agent"),
+          id: "accounts.clear-query",
+          label: "Clear the account query",
+          description: "Remove every condition and show all accounts.",
+          run: () => setQuery(EMPTY_PREDICATE, "agent"),
         },
       ]}
       suggestions={[
         "Show me accounts that haven't logged in for 30 days",
-        "Delete the selected accounts",
-        "Clear the filter",
+        "All accounts created before 11.09.2025 that are mine, in my unit, approved by priya@northwind.example — export them",
+        "Clear the query",
       ]}
     >
       <Page>
@@ -162,17 +272,16 @@ export function AccountsPage() {
                 }
                 items={[
                   {
-                    id: "clear",
-                    label: "Clear filters",
-                    disabled: !filtered,
-                    onSelect: () =>
-                      setFilter({ status: "all", inactiveDays: 0, search: "" }, "user"),
+                    id: "export",
+                    label: "Export matching accounts",
+                    description: `${visibleAccounts.length} rows`,
+                    onSelect: exportNow,
                   },
                   {
-                    id: "dormant",
-                    label: "Show dormant accounts",
-                    description: "No sign-in for 30 days",
-                    onSelect: () => setFilter({ inactiveDays: 30 }, "user"),
+                    id: "clear",
+                    label: "Clear query",
+                    disabled: isEmptyPredicate(query),
+                    onSelect: () => setQuery(EMPTY_PREDICATE, "user"),
                   },
                   { id: "sep", separator: true },
                   {
@@ -188,51 +297,48 @@ export function AccountsPage() {
             }
           />
 
+          {/*
+            The active query, however it was built. A condition the agent
+            added and one the user added are indistinguishable here, which is
+            the point.
+          */}
+          <QueryChips
+            query={query}
+            target="accounts.table"
+            schema={ACCOUNT_QUERY_SCHEMA}
+            onQueryChange={(next, meta) => setQuery(next, meta.source)}
+          />
+
           <DataTable
             agentId="accounts.table"
             agent={{
               label: "Accounts table",
               description:
-                "The account list. Its value is the active filter; its state carries the " +
+                "The account list. Its value is the active query; its state carries the " +
                 "visible row ids and the current selection.",
             }}
             rows={visibleAccounts}
             columns={columns}
             rowKey={(account) => account.id}
             caption="Accounts"
-            filter={filter as unknown as Record<string, unknown>}
-            onFilterChange={(next, meta) => setFilter(next as Partial<AccountFilter>, meta.source)}
-            validateFilter={(next) => {
-              const allowed = ["status", "inactiveDays", "search"];
-              const unknown = Object.keys(next).filter((key) => !allowed.includes(key));
-              if (unknown.length > 0) {
-                return `Unknown filter field(s): ${unknown.join(", ")}. Allowed: ${allowed.join(", ")}.`;
-              }
-              if (
-                next.status !== undefined &&
-                !["all", "active", "invited", "suspended"].includes(String(next.status))
-              ) {
-                return `"${String(next.status)}" is not a valid account status.`;
-              }
-              return undefined;
-            }}
+            querySchema={ACCOUNT_QUERY_SCHEMA}
+            query={query}
+            onQueryChange={(next, meta) => setQuery(next, meta.source)}
             selectedIds={selected}
             onSelectionChange={(ids) => dispatch({ type: "set-selection", ids, source: "user" })}
             emptyMessage={
               <EmptyState
                 align="center"
                 icon={<IconTable size={18} />}
-                title="No accounts match this filter"
-                description="Try a different status, or clear the filter to see everything."
+                title="No accounts match this query"
+                description="Remove a condition, or clear the query to see everything."
                 action={
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() =>
-                      setFilter({ status: "all", inactiveDays: 0, search: "" }, "user")
-                    }
+                    onClick={() => setQuery(EMPTY_PREDICATE, "user")}
                   >
-                    Clear filter
+                    Clear query
                   </Button>
                 }
               />
@@ -252,21 +358,26 @@ export function AccountsPage() {
                     }}
                   />
                   <Input
-                    agentId="accounts.search"
-                    agent={{ description: "Free-text search over account name, owner and email." }}
-                    value={filter.search}
-                    placeholder="Search accounts"
-                    aria-label="Search accounts"
+                    value={searchValue}
+                    placeholder="Search by name"
+                    aria-label="Search accounts by name"
                     style={{ paddingInlineStart: "26px" }}
-                    onValueChange={(next, meta) => setFilter({ search: next }, meta.source)}
+                    onValueChange={(next, meta) =>
+                      setQuery(
+                        setCondition(
+                          query,
+                          "name",
+                          next ? { kind: "compare", field: "name", op: "contains", value: next } : null,
+                        ),
+                        meta.source,
+                      )
+                    }
                   />
                 </div>
 
                 <div style={{ width: 150 }}>
                   <Select
-                    agentId="accounts.status-filter"
-                    agent={{ description: "Restricts the table to one account status." }}
-                    value={filter.status}
+                    value={statusValue}
                     aria-label="Filter by status"
                     options={[
                       { value: "all", label: "All statuses" },
@@ -275,24 +386,26 @@ export function AccountsPage() {
                       { value: "suspended", label: "Suspended" },
                     ]}
                     onValueChange={(next, meta) =>
-                      setFilter({ status: next as AccountFilter["status"] }, meta.source)
+                      setQuery(
+                        setCondition(
+                          query,
+                          "status",
+                          next === "all"
+                            ? null
+                            : { kind: "compare", field: "status", op: "eq", value: next },
+                        ),
+                        meta.source,
+                      )
                     }
                   />
                 </div>
 
                 <div style={{ width: 190 }}>
                   <Select
-                    agentId="accounts.inactive-filter"
-                    agent={{
-                      description:
-                        "Restricts the table to accounts with no sign-in for N days. 0 disables it.",
-                    }}
-                    value={String(filter.inactiveDays)}
+                    value={inactiveValue}
                     aria-label="Filter by last sign-in"
                     options={INACTIVE_OPTIONS}
-                    onValueChange={(next, meta) =>
-                      setFilter({ inactiveDays: Number(next) }, meta.source)
-                    }
+                    onValueChange={(next, meta) => setDormant(Number(next), meta.source)}
                   />
                 </div>
 

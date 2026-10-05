@@ -5,4 +5,6 @@ export type * from "./messages";
 export type * from "./metadata";
 export type * from "./policy";
 export type * from "./state";
+export type * from "./query";
 export type * from "./registry";
+export type * from "./staged";

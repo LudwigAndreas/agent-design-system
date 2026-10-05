@@ -1,6 +1,7 @@
 import type { AgentAdapter, AgentTurnContext } from "../../agent/types/adapter";
 import type { AgentEvent } from "../../agent/types/events";
 import type { AgentReadableState } from "../../agent/types/state";
+import type { ComparisonPredicate, QueryPredicate } from "../../agent/types/query";
 
 /**
  * A deterministic, offline stand-in for a model provider.
@@ -199,6 +200,142 @@ const MATCHERS: Matcher[] = [
     },
   },
 
+  /* ---- The acceptance scenario: a compound query, then an export ------ */
+  {
+    id: "account-query",
+    test: (input) =>
+      any(input, "account", "order") &&
+      (any(input, "mine", "my unit", "approved", "created before", "export") ||
+        /\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/.test(input)),
+    async *run(context) {
+      const text = context.input.text;
+      const lower = text.toLowerCase();
+      const conditions: ComparisonPredicate[] = [];
+      const described: string[] = [];
+
+      // "created before 11.09.2025" — the literal is passed through as written.
+      // Reading it is the application's job, not the model's.
+      const before = /before\s+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2})/i.exec(text);
+      if (before) {
+        conditions.push({ kind: "compare", field: "createdAt", op: "lt", value: before[1]! });
+        described.push("created before that date");
+      }
+
+      // "mine" / "my orders" — a reference, never a resolved identity.
+      if (any(lower, "mine", "my order", "my account", " i own", "owned by me")) {
+        conditions.push({
+          kind: "compare",
+          field: "owner",
+          op: "eq",
+          value: { $context: "current-user" },
+        });
+        described.push("owned by you");
+      }
+
+      if (any(lower, "my unit", "my team", "my department")) {
+        conditions.push({
+          kind: "compare",
+          field: "unit",
+          op: "eq",
+          value: { $context: "current-user-unit" },
+        });
+        described.push("assigned to your unit");
+      }
+
+      // An email address stands in for a person; the directory resolves it.
+      const email = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(text);
+      if (email) {
+        const field = any(lower, "approve") ? "approver" : "owner";
+        conditions.push({
+          kind: "compare",
+          field,
+          op: "eq",
+          value: { $lookup: { entity: "user", by: "email", value: email[0] } },
+        });
+        described.push(`${field === "approver" ? "approved" : "owned"} by ${email[0]}`);
+      }
+
+      if (conditions.length === 0) {
+        yield* say(
+          context.turnId,
+          "I can query accounts by created date, owner, approver, unit, status, plan, " +
+            "seats and last sign-in. Tell me which of those you want and I'll build it.",
+        );
+        return;
+      }
+
+      yield* say(context.turnId, `Looking for accounts ${described.join(", ")}.\n\n`);
+
+      await context.execute({ type: "navigate", target: "accounts" });
+
+      const predicate: QueryPredicate =
+        conditions.length === 1 ? conditions[0]! : { kind: "and", predicates: conditions };
+
+      const applied = await context.execute({
+        type: "filter",
+        target: "accounts.table",
+        filter: predicate,
+        reason: text,
+      });
+
+      if (!applied.success) {
+        // A rejected query says precisely what was wrong; pass that on rather
+        // than guessing at a different one.
+        yield* say(
+          context.turnId,
+          `I couldn't build that query.\n\n${applied.error?.userMessage ?? applied.message}`,
+        );
+        return;
+      }
+
+      const count = applied.matchCount ?? 0;
+      await context.execute({ type: "reveal", target: "accounts.table" });
+      yield* say(
+        context.turnId,
+        `**${count} account${count === 1 ? "" : "s"}** match. ` +
+          `You can see each condition above the table and remove any of them.`,
+      );
+
+      if (!any(lower, "export", "excel", "spreadsheet", "csv", "download")) {
+        yield {
+          type: "suggestions-updated",
+          turnId: context.turnId,
+          suggestions: ["Export these accounts", "Clear the query"],
+        };
+        return;
+      }
+
+      if (count === 0) {
+        yield* say(context.turnId, "\n\nThere is nothing to export while nothing matches.");
+        return;
+      }
+
+      yield* say(context.turnId, "\n\nI've prepared the export — it's yours to run.\n\n");
+
+      const staged = await context.execute({
+        type: "invoke",
+        target: "accounts.export",
+        reason: "The user asked for the matching accounts as a spreadsheet.",
+      });
+
+      if (staged.status === "staged") {
+        // Prepared, not done. Saying otherwise would be a lie the user
+        // cannot check until they look for a file that isn't there.
+        yield* say(
+          context.turnId,
+          `The export is ready and waiting for you — nothing has been generated yet.`,
+        );
+      } else if (staged.status === "cancelled") {
+        yield* say(context.turnId, "Cancelled — no export was prepared.");
+      } else {
+        yield* say(
+          context.turnId,
+          staged.error?.userMessage ?? "I couldn't prepare the export.",
+        );
+      }
+    },
+  },
+
   /* ---- Example 4: filter a table ------------------------------------- */
   {
     id: "filter-accounts",
@@ -220,10 +357,21 @@ const MATCHERS: Matcher[] = [
       };
 
       await context.execute({ type: "navigate", target: "accounts" });
+
+      // Never-signed-in accounts have no last sign-in at all, so the
+      // disjunction with `isEmpty` is what makes "dormant" mean what the
+      // user means by it.
+      const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
       const result = await context.execute({
         type: "filter",
         target: "accounts.table",
-        filter: { status: "all", inactiveDays: days, search: "" },
+        filter: {
+          kind: "or",
+          predicates: [
+            { kind: "compare", field: "lastLoginAt", op: "lt", value: cutoff },
+            { kind: "compare", field: "lastLoginAt", op: "isEmpty" },
+          ],
+        },
         reason: `The user asked for accounts inactive for ${days} days.`,
       });
 
@@ -253,7 +401,11 @@ const MATCHERS: Matcher[] = [
       yield {
         type: "suggestions-updated",
         turnId: context.turnId,
-        suggestions: ["Delete the selected accounts", "Suspend these accounts", "Clear the filter"],
+        suggestions: [
+          "Export these accounts",
+          "Delete the selected accounts",
+          "Clear the query",
+        ],
       };
     },
   },

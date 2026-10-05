@@ -2,10 +2,17 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useOptionalAgent } from "../hooks/useAgent";
 import { AgentPageScopeContext } from "../hooks/useAgentPageContext";
 import type { AgentDeclaredAction } from "../types/state";
+import type { StagedRunOutcome } from "../types/staged";
 
 export interface AgentContextAction extends AgentDeclaredAction {
-  /** The application function this action runs. Business logic lives here. */
-  run: (params?: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * The application function this action runs. Business logic lives here.
+   * A staging action returns what it produced, so the artifact can be
+   * offered to the user.
+   */
+  run: (
+    params?: Record<string, unknown>,
+  ) => void | StagedRunOutcome | Promise<void | StagedRunOutcome>;
 }
 
 export interface AgentContextProps {
@@ -85,7 +92,7 @@ export function AgentContext({
             if (!match) {
               throw new Error(`Declared action "${action.id}" is no longer available.`);
             }
-            await match.run(params);
+            return (await match.run(params)) ?? undefined;
           },
         },
       }),
