@@ -16,8 +16,9 @@
 >
 > **Assumptions:** Java backend owns all business logic; IAMProxy (OIDC)
 > fronts every request and injects a validated JWT; Kubernetes + Helm +
-> Argo CD for deployment; Nexus for packages; GigaChat (or an internal
-> OpenAI-compatible gateway) as the LLM; PostgreSQL available.
+> Argo CD for deployment; Java backend runs in its **own namespace**;
+> GigaChat is consumed as a **cloud API** (Sber); a RAG service provides
+> knowledge search; PostgreSQL available.
 
 ---
 
@@ -66,37 +67,45 @@ flowchart LR
 
     IDP["OIDC provider<br/>(corporate IdP)"]
 
-    %% ───────────── Platform (K8s) ─────────────
-    subgraph K8s["Kubernetes namespace (Helm + Argo CD)"]
+    %% ───────────── Kubernetes ─────────────
+    subgraph K8s["Kubernetes cluster (Helm + Argo CD)"]
         direction TB
 
-        subgraph Agent["Agent service — Node.js (NEW)"]
+        subgraph NSA["Namespace: agent (NEW)"]
             direction TB
-            AUTH["getSession()<br/>verify JWT via JWKS<br/>→ user, org, role"]
-            GATE["Action gateway<br/>validate → access → authorize<br/>→ run → audit"]
-            LOOP["Agent loop<br/>(LLM tool-calling)"]
-            ACT["Actions<br/>(TypeScript, defineAction)<br/>thin adapters to Java"]
-            SKL["Skills & instructions<br/>(.agents/skills, AGENTS.md,<br/>user resources)"]
-            PROTO["Protocol surfaces<br/>HTTP /_agent-native/actions<br/>MCP · A2A (future)"]
+            subgraph Agent["Agent service — Node.js"]
+                direction TB
+                AUTH["getSession()<br/>verify JWT via JWKS<br/>→ user, org, role"]
+                GATE["Action gateway<br/>validate → access → authorize<br/>→ run → audit"]
+                LOOP["Agent loop<br/>(LLM tool-calling)"]
+                ACT["Actions<br/>(TypeScript, defineAction)<br/>thin adapters to Java & RAG"]
+                SKL["Skills & instructions<br/>(.agents/skills, AGENTS.md,<br/>user resources)"]
+                PROTO["Protocol surfaces<br/>HTTP /_agent-native/actions<br/>MCP · A2A (future)"]
+                AUDV["Audit views<br/>list / export-audit-events<br/>(UI + admins)"]
+            end
+            LLMGW["LLM adapter<br/>gpt2giga or corporate<br/>LLM gateway"]
+            PGA[("PostgreSQL — agent schema<br/>threads, runs, skills,<br/>audit_log, app roles")]
         end
 
-        JAVA["Java backend (EXISTING)<br/>business logic, domain DB"]
-        LLMGW["LLM adapter<br/>gpt2giga or corporate<br/>LLM gateway"]
+        subgraph NSJ["Namespace: java-backend (EXISTING)"]
+            JAVA["Java backend<br/>business logic"]
+            PGJ[("Domain DB")]
+        end
+
+        subgraph NSR["Namespace: rag"]
+            RAG["RAG service<br/>retrieve + rank<br/>(permission-filtered)"]
+            VEC[("Vector store<br/>+ document index")]
+            ING["Ingestion<br/>chunk + embed<br/>(docs, Java data)"]
+        end
     end
 
-    subgraph Data["Data stores"]
-        PGA[("PostgreSQL — agent schema<br/>threads, runs, skills,<br/>audit_log, app roles")]
-        PGJ[("Domain DB<br/>owned by Java")]
+    subgraph Cloud["☁️ GigaChat cloud (Sber)"]
+        LLM["GigaChat API<br/>chat completions"]
+        EMB["GigaChat Embeddings"]
+        OAUTH["OAuth endpoint<br/>ngw.devices.sberbank.ru"]
     end
 
-    subgraph Ops["Enterprise platform services"]
-        OTEL["OpenTelemetry collector<br/>→ tracing / metrics"]
-        SIEM["SIEM<br/>(OCSF audit export)"]
-        VAULT["Secrets manager<br/>(K8s secrets / Vault)"]
-        NEXUS["Nexus<br/>npm proxy / hosted"]
-    end
-
-    LLM["GigaChat API<br/>(or other LLM)"]
+    OTEL["OpenTelemetry collector<br/>→ tracing / metrics"]
 
     %% ───────────── Calls ─────────────
     U -- "HTTPS + session cookie" --> IAM
@@ -109,38 +118,46 @@ flowchart LR
     SVC -. "HTTP + service token" .-> PROTO
     PROTO --> GATE
 
-    AUTH -- "UI action calls" --> GATE
+    AUTH -- "UI action calls<br/>(incl. search-knowledge)" --> GATE
     AUTH -- "chat requests (SSE stream back)" --> LOOP
     LOOP -- "reads" --> SKL
     LOOP -- "prompt + tool list" --> LLMGW
-    LLMGW -- "OAuth token,<br/>tools→functions" --> LLM
+    LLMGW -- "HTTPS (egress),<br/>tools→functions" --> LLM
+    LLMGW -. "token refresh" .-> OAUTH
     LOOP -- "tool call" --> GATE
     GATE --> ACT
-    ACT -- "REST + user/service token" --> JAVA
+    ACT -- "REST + user/service token<br/>(cross-namespace)" --> JAVA
+    ACT -- "search-knowledge<br/>(query + user identity)" --> RAG
     JAVA --> PGJ
+    RAG --> VEC
+    ING --> VEC
+    ING -- "embed chunks" --> EMB
+    RAG -- "embed query" --> EMB
+    JAVA -. "domain data feed" .-> ING
 
-    GATE -- "audit row per mutation" --> PGA
+    GATE -- "audit row per mutation<br/>+ audited reads" --> PGA
     LOOP -- "threads, runs" --> PGA
+    AUDV -- "reads" --> PGA
 
     Agent -- "spans + metrics" --> OTEL
-    PGA -- "export-audit-ocsf" --> SIEM
-    VAULT -. "DATABASE_URL, secrets" .-> Agent
-    NEXUS -. "build-time packages" .-> Agent
 ```
 
 ### 2.1 Component responsibilities
 
-| Component                 | Owner           | Responsibility                                                                                                             | Status                                            |
-| ------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| React SPA + agent sidebar | Frontend team   | Existing UI; adds `<AgentSidebar>` / `<AgentNativeEmbedded>`; passes page context (current record, route) to the agent     | ✅ verified (demo)                                |
-| IAMProxy                  | Platform/IAM    | OIDC login; injects validated JWT on every request                                                                         | existing                                          |
-| Agent service (Node.js)   | Our team        | Hosts actions, agent loop, skills, audit, protocols. **No business logic** — calls Java                                    | ✅ verified (demo)                                |
-| `getSession()`            | Our team        | Verifies JWT (signature, issuer, audience, expiry) and maps claims → user/org/role                                         | ✅ hook verified in source; 🔧 our implementation |
-| Actions                   | Our team        | Typed adapters: input schema (zod) → call Java REST → return result                                                        | ✅ verified (demo)                                |
-| Java backend              | Backend team    | Unchanged business logic; final authority on data permissions                                                              | existing                                          |
-| LLM adapter               | Platform        | Makes GigaChat speak the OpenAI protocol (OAuth refresh, `tools`→`functions`, TLS CA)                                      | ✅ verified (demo, `gpt2giga`)                    |
-| PostgreSQL (agent schema) | DBA             | Framework tables only: chat threads, runs, skills/resources, audit log, app roles. **Separate schema/DB from domain data** | 📄 documented                                     |
-| OTel collector, SIEM      | Platform/SecOps | Traces, metrics, audit trail ingestion                                                                                     | 📄 documented                                     |
+| Component                                   | Owner               | Responsibility                                                                                                                                                         | Status                                            |
+| ------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| React SPA + agent sidebar                   | Frontend team       | Existing UI; adds `<AgentSidebar>` / `<AgentNativeEmbedded>`; passes page context (current record, route) to the agent                                                 | ✅ verified (demo)                                |
+| IAMProxy                                    | Platform/IAM        | OIDC login; injects validated JWT on every request                                                                                                                     | existing                                          |
+| Agent service (Node.js) — namespace `agent` | Our team            | Hosts actions, agent loop, skills, audit, protocols. **No business logic** — calls Java and RAG                                                                        | ✅ verified (demo)                                |
+| `getSession()`                              | Our team            | Verifies JWT (signature, issuer, audience, expiry) and maps claims → user/org/role                                                                                     | ✅ hook verified in source; 🔧 our implementation |
+| Actions                                     | Our team            | Typed adapters: input schema (zod) → call Java REST or RAG → return result                                                                                             | ✅ verified (demo)                                |
+| Java backend — namespace `java-backend`     | Backend team        | Unchanged business logic; final authority on data permissions. Reached from the agent namespace over the cluster network (NetworkPolicy allow-list)                    | existing                                          |
+| RAG service — namespace `rag`               | Our team / platform | Retrieves relevant document chunks for a query; **filters by the caller's permissions**; ingestion embeds documents and Java data                                      | 🔧                                                |
+| LLM adapter — namespace `agent`             | Platform            | Makes the GigaChat cloud API speak the OpenAI protocol (OAuth refresh, `tools`→`functions`, TLS CA). The **only** component with egress to GigaChat chat               | ✅ verified (demo, `gpt2giga`)                    |
+| GigaChat (cloud)                            | Sber                | Chat completions + Embeddings models (`Embeddings`, `Embeddings-2`, `EmbeddingsGigaR`)                                                                                 | ✅ models listed via API                          |
+| PostgreSQL (agent schema)                   | DBA                 | Framework tables only: chat threads, runs, skills/resources, audit log, app roles. **Separate schema/DB from domain data**                                             | 📄 documented                                     |
+| Audit views                                 | Our team            | Audit trail is **read from the agent DB** via `list-audit-events` / `export-audit-events` (UI page for users, CSV/NDJSON export for admins). No push from the database | 📄 documented                                     |
+| OTel collector                              | Platform            | Traces, metrics                                                                                                                                                        | 📄 documented                                     |
 
 ### 2.2 Key design rule
 
@@ -203,6 +220,73 @@ sequenceDiagram
 trail — for humans, the agent, and external agents alike. ✅ verified in
 demo (tasks created by chat and by button go through the same action).
 
+### 3.3 RAG — knowledge search for both UI and agent
+
+RAG is exposed as **one action**, e.g. `search-knowledge`. The UI calls it
+as a search box / "related documents" panel; the agent calls the same
+action as a tool when it needs facts. Both go through the same
+authorization and the same audit.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Employee
+    participant UI as React SPA
+    participant AG as Agent service<br/>(namespace agent)
+    participant LLM as LLM adapter →<br/>GigaChat cloud
+    participant R as RAG service<br/>(namespace rag)
+    participant E as GigaChat Embeddings<br/>(cloud)
+
+    rect rgb(235, 245, 255)
+    note over User,R: A — UI calls RAG directly (no LLM)
+    User->>UI: types query in search box
+    UI->>AG: useActionQuery("search-knowledge", {q})
+    AG->>AG: authorize + audit (onRead)
+    AG->>R: POST /search {q, userId, roles}
+    R->>E: embed query
+    R->>R: vector search + permission filter
+    R-->>AG: top-k chunks + source links
+    AG-->>UI: results rendered with links
+    end
+
+    rect rgb(240, 255, 240)
+    note over User,R: B — agent uses RAG as a tool
+    User->>AG: "What is our refund policy for B2B clients?"
+    AG->>LLM: prompt + tools (incl. search-knowledge)
+    LLM-->>AG: tool call search-knowledge {q}
+    AG->>R: same call, same identity
+    R-->>AG: chunks + sources
+    AG->>LLM: tool result
+    LLM-->>AG: answer citing sources
+    AG-->>UI: streamed answer with source links
+    end
+```
+
+```ts
+// actions/search-knowledge.ts — one action, two consumers (UI + agent)
+export default defineAction({
+  description:
+    "Search internal knowledge base. Use for policies, procedures, product docs.",
+  schema: z.object({
+    q: z.string().min(2),
+    limit: z.number().max(20).default(8),
+  }),
+  http: { method: "GET" },
+  readOnly: true,
+  audit: { onRead: true }, // knowledge reads are audited too
+  run: async ({ q, limit }, ctx) =>
+    ragClient.search({ q, limit, user: ctx?.userEmail, org: ctx?.orgId }),
+});
+```
+
+| Design point                                    | Decision                                                                                                             |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Who enforces document permissions?              | **The RAG service**, using the identity passed by the action. The agent must never see chunks the user couldn't open |
+| Why not let the UI call RAG directly via nginx? | Possible, but then UI and agent use different paths, permissions and audit. Going through the action keeps one path  |
+| Embeddings                                      | GigaChat Embeddings (cloud) — same provider, same data-classification approval as chat                               |
+| Grounding                                       | Return source links with every chunk; skill/instructions tell the agent to cite them                                 |
+| Status                                          | 🔧 RAG service is integration work; the action pattern is standard (✅ actions verified in demo)                     |
+
 ---
 
 ## 4. Benefits
@@ -217,7 +301,7 @@ demo (tasks created by chat and by button go through the same action).
 | **Business users extend behavior without deploys** | Skills, instructions (`AGENTS.md`), scheduled tasks, automations editable at runtime          | ✅ (file skills) / ⚠️ (UI-created skills failed with GigaChat) |
 | **Future-proof integration**                       | Same actions exposed over MCP/A2A later — no rewrite                                          | 📄                                                             |
 | **LLM-agnostic**                                   | OpenAI-compatible, Anthropic, Google, Mistral, …; swap via config                             | ✅ (GigaChat via adapter)                                      |
-| **Open source, MIT**                               | No vendor lock-in; can fork into our Nexus                                                    | ✅                                                             |
+| **Open source, MIT**                               | No vendor lock-in; can fork                                                                   | ✅                                                             |
 | **Standard observability**                         | OpenTelemetry spans/metrics for runs, model calls, tool calls                                 | 📄                                                             |
 
 ---
@@ -237,8 +321,9 @@ demo (tasks created by chat and by button go through the same action).
 | Con                                                                                                                       | Impact                                                                                                                | Mitigation                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Nitro is a hard npm dependency** and the official build/runtime uses it                                                 | Conflicts with our "no Nitro" policy                                                                                  | Core runtime is h3-based and doesn't import Nitro; host on plain Node + h3 (🔧, unsupported path) or obtain a policy exception for build-time use. **Decision needed.** |
-| **Fast-moving, young project** (v0.209, frequent releases, Nitro dep is a beta)                                           | Upgrade churn; possible breaking changes                                                                              | Pin versions in Nexus; upgrade on a schedule; keep actions thin                                                                                                         |
-| **New runtime in the stack** (Node.js service + Postgres schema)                                                          | Ops/on-call, patching, monitoring                                                                                     | Standard Helm chart; reuse platform OTel/SIEM                                                                                                                           |
+| **Fast-moving, young project** (v0.209, frequent releases, Nitro dep is a beta)                                           | Upgrade churn; possible breaking changes                                                                              | Pin versions; upgrade on a schedule; keep actions thin                                                                                                                  |
+| **New runtime in the stack** (Node.js service + Postgres schema)                                                          | Ops/on-call, patching, monitoring                                                                                     | Standard Helm chart; reuse platform OTel                                                                                                                                |
+| **LLM is an external cloud API**                                                                                          | Data leaves the cluster; dependency on Sber availability                                                              | Egress only from the LLM adapter; agree data classification for prompts; timeouts/retries in the adapter                                                                |
 | **LLM quality drives UX**                                                                                                 | In our demo GigaChat: claimed a skill was saved when it wasn't; answered from stale history; loosely followed formats | Pilot with read + low-risk writes; `needsApproval` on risky ones; evaluate stronger models/gateway                                                                      |
 | **GigaChat is not OpenAI-native**                                                                                         | Needs adapter (OAuth refresh, `functions` format, Russian root CA, no `reasoning_effort: none`)                       | `gpt2giga` (verified) or corporate gateway                                                                                                                              |
 | **App roles stored in framework DB**, not read from IdP                                                                   | Second place to manage roles                                                                                          | 🔧 map JWT claims → roles in our auth layer (see §6.3)                                                                                                                  |
@@ -381,8 +466,14 @@ Every **mutating** action call appends a row to `agent_audit_log`:
 - Sensitive **reads** can be audited with `audit: { onRead: true }`.
 - Query: `list-audit-events`, `get-audit-event`, `export-audit-events`
   (CSV/NDJSON) — also usable from UI ("who changed this?") and by the agent.
-- **SIEM:** `export-audit-ocsf` returns OCSF 1.9.0 API Activity events
-  for scheduled pull. 🔧 a small job to ship it to our SIEM.
+- **How the audit is consumed:** the database does **not** push events
+  anywhere. Audit is _pulled_ through actions:
+  - an **audit page in our UI** (`useActionQuery("list-audit-events", …)`) —
+    users see their own and their agent's changes, admins see the org;
+  - **CSV/NDJSON export** (`export-audit-events`) for compliance reviews;
+  - the agent itself can answer "what did you change?" from the same trail.
+    If a central log store is required later, a scheduled job can call
+    `export-audit-events` over HTTP — still no DB-side integration. 🔧
 
 ### 8.2 Observability (📄)
 
@@ -406,44 +497,52 @@ Every **mutating** action call appends a row to `agent_audit_log`:
 
 ## 9. Fit with enterprise standards
 
-| Standard                 | How we comply                                                                                                                                                                              | Status               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
-| **Packages via Nexus**   | npm proxy repo for `@agent-native/*` + deps (MIT); pin versions; optionally build from source into a hosted repo (fork)                                                                    | 🔧                   |
-| **No Nitro (policy)**    | Option 1: host core on plain Node + h3 (no Nitro at runtime; Nitro still in the dependency tree). Option 2: fork and remove the dependency. Option 3: policy exception for build-time only | ⚠️ decision          |
-| **SSO / OIDC**           | IAMProxy + `getSession()` JWT verification                                                                                                                                                 | ✅ hook verified     |
-| **RBAC**                 | IdP claims → org/app roles; `authorize`/`access` on actions; Java final check                                                                                                              | 🔧 mapping           |
-| **Audit / SIEM**         | Built-in append-only audit + OCSF export                                                                                                                                                   | 📄 + 🔧 shipping job |
-| **Observability**        | OpenTelemetry → existing collector                                                                                                                                                         | 📄                   |
-| **Secrets**              | Env from K8s secrets / Vault: `DATABASE_URL`, `BETTER_AUTH_SECRET`, LLM keys; never in git                                                                                                 | standard             |
-| **Database**             | PostgreSQL, **dedicated schema/DB** for agent tables; migrations via `migrate:production` in a pre-deploy job                                                                              | 📄                   |
-| **CI/CD**                | Jenkins/SMDL builds a Node image → registry → Helm chart → Argo CD (same flow as Java services, see `platform-blueprint.md`)                                                               | 🔧                   |
-| **Network egress**       | Allow-list: LLM endpoint only; disable PostHog/Sentry or point to internal                                                                                                                 | 🔧                   |
-| **Data residency / LLM** | GigaChat (RU-hosted) or internal gateway; no data to foreign LLMs unless approved                                                                                                          | decision             |
-| **TLS**                  | Russian Trusted Root CA in the image trust store for Sber endpoints                                                                                                                        | ✅ verified need     |
+| Standard                 | How we comply                                                                                                                                                                              | Status             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| **No Nitro (policy)**    | Option 1: host core on plain Node + h3 (no Nitro at runtime; Nitro still in the dependency tree). Option 2: fork and remove the dependency. Option 3: policy exception for build-time only | ⚠️ decision        |
+| **SSO / OIDC**           | IAMProxy + `getSession()` JWT verification                                                                                                                                                 | ✅ hook verified   |
+| **RBAC**                 | IdP claims → org/app roles; `authorize`/`access` on actions; Java final check                                                                                                              | 🔧 mapping         |
+| **Audit**                | Built-in append-only audit in the agent DB; read via audit UI page and CSV/NDJSON export (pull, no DB push)                                                                                | 📄 + 🔧 audit page |
+| **Observability**        | OpenTelemetry → existing collector                                                                                                                                                         | 📄                 |
+| **Database**             | PostgreSQL, **dedicated schema/DB** for agent tables; migrations via `migrate:production` in a pre-deploy job                                                                              | 📄                 |
+| **CI/CD**                | Jenkins/SMDL builds a Node image → registry → Helm chart → Argo CD (same flow as Java services, see `platform-blueprint.md`)                                                               | 🔧                 |
+| **Namespaces & network** | `agent`, `java-backend`, `rag` namespaces; NetworkPolicies allow only agent → Java, agent → RAG                                                                                            | 🔧                 |
+| **Network egress**       | Only the LLM adapter (and RAG embeddings) may reach GigaChat cloud; disable PostHog/Sentry or point to internal                                                                            | 🔧                 |
+| **Data residency / LLM** | GigaChat (RU-hosted) or internal gateway; no data to foreign LLMs unless approved                                                                                                          | decision           |
+| **TLS**                  | Russian Trusted Root CA in the image trust store for Sber endpoints                                                                                                                        | ✅ verified need   |
 
 ### 9.1 Deployment view
 
 ```mermaid
 flowchart TB
     subgraph CI["CI — Jenkins / SMDL"]
-        SRC["Git repo<br/>agent-service"] --> BUILD["npm ci (Nexus)<br/>typecheck, tests"] --> IMG["Docker image<br/>node:22 + CA bundle"]
+        SRC["Git repo<br/>agent-service"] --> BUILD["npm ci<br/>typecheck, tests"] --> IMG["Docker image<br/>node:22 + CA bundle"]
     end
     IMG --> REG["Container registry"]
     REG --> ARGO["Argo CD"]
     ARGO --> HELM["Helm release: agent-service"]
 
-    subgraph NS["K8s namespace"]
+    subgraph NS["Namespace: agent"]
         HELM --> DEP["Deployment<br/>agent-service (N replicas)"]
         HELM --> MIG["Pre-sync Job<br/>migrate:production"]
         HELM --> LLMD["Deployment<br/>llm-adapter (gpt2giga)"]
         DEP --> LLMD
-        DEP --> JAVA["Java services"]
     end
 
+    subgraph NSJ["Namespace: java-backend"]
+        JAVA["Java services"]
+    end
+
+    subgraph NSR["Namespace: rag"]
+        RAGD["RAG service"]
+    end
+
+    DEP -- "NetworkPolicy allowed" --> JAVA
+    DEP -- "NetworkPolicy allowed" --> RAGD
+    LLMD -- "egress" --> GC["☁️ GigaChat cloud"]
+    RAGD -- "egress (embeddings)" --> GC
     MIG --> PG[("PostgreSQL<br/>agent schema")]
     DEP --> PG
-    SEC["K8s Secrets / Vault"] -.-> DEP
-    SEC -.-> LLMD
 ```
 
 ---
@@ -467,7 +566,7 @@ flowchart TB
 flowchart LR
     P0["Phase 0 — Done<br/>Local demo<br/>GigaChat via adapter<br/>tasks UI, skills"]
     P1["Phase 1 — Pilot<br/>Embedded sidebar in our SPA<br/>IAMProxy JWT<br/>5–10 actions → Java<br/>audit + OTel"]
-    P2["Phase 2 — Production<br/>RBAC mapping, approvals<br/>SIEM export, Helm/Argo<br/>skills via PR"]
+    P2["Phase 2 — Production<br/>RBAC mapping, approvals<br/>audit page, RAG, Helm/Argo<br/>skills via PR"]
     P3["Phase 3 — Open up<br/>MCP server for internal<br/>AI tools (Cursor, IDEs)<br/>A2A between our agents"]
     P4["Phase 4 — Ecosystem<br/>External agent UIs<br/>(ChatGPT/Claude via MCP Apps)<br/>agent teams, automations"]
     P0 --> P1 --> P2 --> P3 --> P4
@@ -536,7 +635,7 @@ decide what each surface may call.
 - `actions-access-control.mdx` — exposure flags, `authorize`, `access`, `needsApproval`
 - `organizations-teams-permissions.mdx` — org/app roles
 - `actions-agent-tools.mdx` — framework tools, code execution
-- `audit-log.mdx` — audit schema, OCSF export, retention
+- `audit-log.mdx` — audit schema, read/export actions, retention
 - `observability.mdx` — OTel spans/metrics, dashboard
 - `mcp-protocol.mdx`, `a2a-protocol.mdx`, `external-agents.mdx`, `mcp-apps.mdx`, `mcp-clients.mdx`
 - `skills-guide.mdx`, `agent-resources.mdx` — skills, resources, slash commands
