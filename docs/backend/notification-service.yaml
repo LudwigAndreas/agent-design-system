@@ -1,0 +1,1565 @@
+components:
+  schemas:
+    Announcement:
+      description: One announcement visible to the caller
+      properties:
+        bodyHtml:
+          type: string
+        bodyText:
+          type: string
+        category:
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        dismissed:
+          type: boolean
+        id:
+          format: uuid
+          type: string
+        locale:
+          description: The language this content was rendered in
+          type: string
+        publishedAt:
+          format: date-time
+          type: string
+        subject:
+          type: string
+        visibleFrom:
+          format: date-time
+          type: string
+        visibleUntil:
+          format: date-time
+          type: string
+      type: object
+    AnnouncementAdmin:
+      description: One announcement as its publisher sees it, audience included
+      properties:
+        audienceType:
+          enum:
+            - EVERYONE
+            - ROLE
+          type: string
+        audienceValue:
+          type: string
+        category:
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        emailRunId:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        publishedAt:
+          format: date-time
+          type: string
+        publishedBy:
+          type: string
+        templateKey:
+          type: string
+        visibleFrom:
+          format: date-time
+          type: string
+        visibleUntil:
+          format: date-time
+          type: string
+      type: object
+    AnnouncementSummary:
+      description: The caller's outstanding announcement count
+      properties:
+        outstanding:
+          format: int64
+          type: integer
+      type: object
+    BatchItem:
+      properties:
+        idempotencyKey:
+          maxLength: 255
+          minLength: 0
+          type: string
+        reference:
+          maxLength: 128
+          minLength: 0
+          type: string
+        request:
+          $ref: "#/components/schemas/SendNotificationRequest"
+      required:
+        - request
+      type: object
+    BatchItemResult:
+      description: The outcome of one item in a batch submission
+      properties:
+        accepted:
+          type: boolean
+        index:
+          format: int32
+          type: integer
+        problem:
+          $ref: "#/components/schemas/ProblemDetail"
+        reference:
+          type: string
+        request:
+          $ref: "#/components/schemas/NotificationRequestResponse"
+      type: object
+    BatchSendRequest:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/BatchItem"
+          maxItems: 500
+          minItems: 0
+          type: array
+      required:
+        - items
+      type: object
+    BatchSendResponse:
+      description: Per-item outcome of a batch submission
+      properties:
+        accepted:
+          format: int32
+          type: integer
+        rejected:
+          format: int32
+          type: integer
+        results:
+          items:
+            $ref: "#/components/schemas/BatchItemResult"
+          type: array
+      type: object
+    DeliveryContentResponse:
+      properties:
+        deliveryId:
+          format: uuid
+          type: string
+        htmlBody:
+          type: string
+        renderedAt:
+          format: date-time
+          type: string
+        subject:
+          type: string
+        templateVersion:
+          type: string
+        textBody:
+          type: string
+      type: object
+    DeliveryResponse:
+      properties:
+        attempts:
+          format: int32
+          type: integer
+        category:
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        channel:
+          enum:
+            - EMAIL
+            - CHAT
+            - WEBHOOK
+            - IN_APP
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        deliveredAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        lastError:
+          type: string
+        lastFailureClass:
+          enum:
+            - RETRYABLE
+            - TERMINAL
+          type: string
+        maxAttempts:
+          format: int32
+          type: integer
+        nextAttemptAt:
+          format: date-time
+          type: string
+        priority:
+          enum:
+            - HIGH
+            - NORMAL
+            - BULK
+          type: string
+        providerMessageId:
+          type: string
+        recipientReference:
+          type: string
+        requestId:
+          format: uuid
+          type: string
+        scheduledAt:
+          format: date-time
+          type: string
+        sentAt:
+          format: date-time
+          type: string
+        status:
+          enum:
+            - ACCEPTED
+            - PENDING
+            - CLAIMED
+            - SENT
+            - DELIVERED
+            - FAILED
+            - DEAD
+            - SUPPRESSED
+            - CANCELLED
+            - BATCHED
+            - COLLAPSED
+          type: string
+        suppressionReason:
+          type: string
+        templateKey:
+          type: string
+        templateVersion:
+          type: string
+      type: object
+    DeliveryTransitionResponse:
+      properties:
+        attemptNumber:
+          format: int32
+          type: integer
+        detail:
+          type: string
+        from:
+          enum:
+            - ACCEPTED
+            - PENDING
+            - CLAIMED
+            - SENT
+            - DELIVERED
+            - FAILED
+            - DEAD
+            - SUPPRESSED
+            - CANCELLED
+            - BATCHED
+            - COLLAPSED
+          type: string
+        occurredAt:
+          format: date-time
+          type: string
+        to:
+          enum:
+            - ACCEPTED
+            - PENDING
+            - CLAIMED
+            - SENT
+            - DELIVERED
+            - FAILED
+            - DEAD
+            - SUPPRESSED
+            - CANCELLED
+            - BATCHED
+            - COLLAPSED
+          type: string
+      type: object
+    FilterMetadata:
+      properties:
+        defaultOrderBy:
+          type: string
+        defaultPageSize:
+          format: int32
+          type: integer
+        entity:
+          type: string
+        maxDepth:
+          format: int32
+          type: integer
+        maxNestedPropertyDepth:
+          format: int32
+          type: integer
+        maxPageSize:
+          format: int32
+          type: integer
+        properties:
+          items:
+            $ref: "#/components/schemas/FilterPropertyMetadata"
+          type: array
+      type: object
+    FilterPropertyMetadata:
+      properties:
+        operators:
+          items:
+            type: string
+          type: array
+        path:
+          type: string
+        sortable:
+          type: boolean
+        type:
+          type: string
+      type: object
+    InboxItem:
+      description: One notification in the caller's own inbox
+      properties:
+        bodyHtml:
+          description: Null on a list; present when one item is fetched
+          type: string
+        bodyText:
+          description: Null on a list; present when one item is fetched
+          type: string
+        category:
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        dismissed:
+          type: boolean
+        dismissedAt:
+          description: When the caller dismissed it. Dismissed items leave the default list but remain retrievable by id.
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        locale:
+          description: The language the content was rendered in when it was produced
+          type: string
+        priority:
+          enum:
+            - HIGH
+            - NORMAL
+            - BULK
+          type: string
+        read:
+          type: boolean
+        readAt:
+          description: When the caller read it. Set once, never reset - it is the instant the retention window is measured from.
+          format: date-time
+          type: string
+        seenAt:
+          description: When the caller was shown this in a list. Set once, never reset.
+          format: date-time
+          type: string
+        subject:
+          description: Null on a list; present when one item is fetched
+          type: string
+        templateKey:
+          description: The notification catalogue key this was rendered from
+          type: string
+      type: object
+    InboxSummary:
+      description: The caller's outstanding notification count
+      properties:
+        unread:
+          format: int64
+          type: integer
+      type: object
+    NotificationRequestResponse:
+      properties:
+        category:
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        deliveries:
+          items:
+            $ref: "#/components/schemas/DeliveryResponse"
+          type: array
+        duplicate:
+          type: boolean
+        id:
+          format: uuid
+          type: string
+        idempotencyKey:
+          type: string
+        operation:
+          $ref: "#/components/schemas/OperationResponse"
+        priority:
+          enum:
+            - HIGH
+            - NORMAL
+            - BULK
+          type: string
+        rejectionReason:
+          type: string
+        scheduledAt:
+          format: date-time
+          type: string
+        state:
+          type: string
+        templateKey:
+          type: string
+      type: object
+    ODataQueryOptions:
+      properties:
+        count:
+          type: boolean
+        filter:
+          type: string
+        orderBy:
+          type: string
+        skip:
+          format: int32
+          type: integer
+        top:
+          format: int32
+          type: integer
+      type: object
+    OperationFailure:
+      properties:
+        args:
+          items:
+            type: string
+          type: array
+        code:
+          type: string
+        detail:
+          type: string
+      type: object
+    OperationProgress:
+      properties:
+        completed:
+          format: int64
+          type: integer
+        phase:
+          type: string
+        total:
+          format: int64
+          type: integer
+        unit:
+          type: string
+      type: object
+    OperationResponse:
+      properties:
+        correlationId:
+          type: string
+        detail:
+          type: string
+        failure:
+          $ref: "#/components/schemas/OperationFailure"
+        finishedAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        progress:
+          $ref: "#/components/schemas/OperationProgress"
+        result:
+          $ref: "#/components/schemas/OperationResult"
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          enum:
+            - PENDING
+            - RUNNING
+            - SUCCEEDED
+            - FAILED
+            - CANCELLED
+            - EXPIRED
+          type: string
+        submittedAt:
+          format: date-time
+          type: string
+        terminal:
+          type: boolean
+      type: object
+    OperationResult:
+      properties:
+        alternatives:
+          items:
+            $ref: "#/components/schemas/OperationResult"
+          type: array
+        href:
+          type: string
+        mediaType:
+          type: string
+        sizeBytes:
+          format: int64
+          type: integer
+      type: object
+    PageResponseAnnouncement:
+      properties:
+        content:
+          items:
+            $ref: "#/components/schemas/Announcement"
+          type: array
+        offset:
+          format: int64
+          type: integer
+        page:
+          format: int32
+          type: integer
+        size:
+          format: int32
+          type: integer
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
+    PageResponseDeliveryResponse:
+      properties:
+        content:
+          items:
+            $ref: "#/components/schemas/DeliveryResponse"
+          type: array
+        offset:
+          format: int64
+          type: integer
+        page:
+          format: int32
+          type: integer
+        size:
+          format: int32
+          type: integer
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
+    PageResponseInboxItem:
+      properties:
+        content:
+          items:
+            $ref: "#/components/schemas/InboxItem"
+          type: array
+        offset:
+          format: int64
+          type: integer
+        page:
+          format: int32
+          type: integer
+        size:
+          format: int32
+          type: integer
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
+    ProblemDetail:
+      description: RFC 9457 problem document, as produced by web-core-spring-boot-starter.
+      properties:
+        code:
+          description: Stable machine-readable code. Branch on this, never on detail.
+          type: string
+        detail:
+          description: Localized explanation, for a human.
+          type: string
+        instance:
+          description: URI of the request that failed.
+          type: string
+        status:
+          description: HTTP status code.
+          type: integer
+        title:
+          description: Short, localized summary.
+          type: string
+        traceId:
+          description: Trace id, for correlating with the logs.
+          type: string
+        type:
+          description: URI identifying the problem type.
+          type: string
+      type: object
+    PublishAnnouncementRequest:
+      description: Publish one announcement. The category decides its class and channels.
+      properties:
+        audienceType:
+          enum:
+            - EVERYONE
+            - ROLE
+          type: string
+        audienceValue:
+          description: The role code for a ROLE audience; omit for EVERYONE
+          maxLength: 128
+          minLength: 0
+          type: string
+        category:
+          maxLength: 255
+          minLength: 0
+          type: string
+        templateKey:
+          maxLength: 128
+          minLength: 0
+          pattern: "[a-z0-9][a-z0-9._-]*"
+          type: string
+        variables:
+          additionalProperties:
+            type: object
+          type: object
+        visibleFrom:
+          format: date-time
+          type: string
+        visibleUntil:
+          format: date-time
+          type: string
+      required:
+        - audienceType
+        - category
+        - templateKey
+        - visibleUntil
+      type: object
+    RecipientDto:
+      properties:
+        address:
+          maxLength: 512
+          minLength: 0
+          type: string
+        exactlyOneIdentifier:
+          type: boolean
+        locale:
+          maxLength: 35
+          minLength: 0
+          type: string
+        timezone:
+          maxLength: 64
+          minLength: 0
+          type: string
+        userId:
+          maxLength: 255
+          minLength: 0
+          type: string
+        variables:
+          additionalProperties:
+            type: object
+          type: object
+      type: object
+    RenderPreviewRequest:
+      properties:
+        channel:
+          enum:
+            - EMAIL
+            - CHAT
+            - WEBHOOK
+            - IN_APP
+          type: string
+        locale:
+          maxLength: 35
+          minLength: 0
+          type: string
+        templateKey:
+          maxLength: 128
+          minLength: 0
+          pattern: "[a-z0-9][a-z0-9._-]*"
+          type: string
+        variables:
+          additionalProperties:
+            type: object
+          type: object
+      required:
+        - channel
+        - templateKey
+      type: object
+    RenderPreviewResponse:
+      properties:
+        channel:
+          enum:
+            - EMAIL
+            - CHAT
+            - WEBHOOK
+            - IN_APP
+          type: string
+        htmlBody:
+          type: string
+        resolvedLocale:
+          type: string
+        subject:
+          type: string
+        templateKey:
+          type: string
+        templateVersion:
+          type: string
+        textBody:
+          type: string
+      type: object
+    SendNotificationRequest:
+      properties:
+        category:
+          maxLength: 128
+          minLength: 0
+          type: string
+        categoryClass:
+          enum:
+            - TRANSACTIONAL
+            - PLATFORM
+            - MARKETING
+          type: string
+        channels:
+          items:
+            enum:
+              - EMAIL
+              - CHAT
+              - WEBHOOK
+              - IN_APP
+            type: string
+          type: array
+          uniqueItems: true
+        priority:
+          enum:
+            - HIGH
+            - NORMAL
+            - BULK
+          type: string
+        recipients:
+          items:
+            $ref: "#/components/schemas/RecipientDto"
+          maxItems: 500
+          minItems: 0
+          type: array
+        scheduledAt:
+          format: date-time
+          type: string
+        templateKey:
+          maxLength: 128
+          minLength: 0
+          pattern: "[a-z0-9][a-z0-9._-]*"
+          type: string
+        variables:
+          additionalProperties:
+            type: object
+          type: object
+      required:
+        - category
+        - categoryClass
+        - channels
+        - priority
+        - recipients
+        - templateKey
+      type: object
+    SuppressionRequest:
+      properties:
+        address:
+          maxLength: 512
+          minLength: 0
+          type: string
+        channel:
+          enum:
+            - EMAIL
+            - CHAT
+            - WEBHOOK
+            - IN_APP
+          type: string
+        detail:
+          maxLength: 2000
+          minLength: 0
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        reason:
+          maxLength: 64
+          minLength: 0
+          type: string
+      required:
+        - address
+        - channel
+        - reason
+      type: object
+    SuppressionResponse:
+      properties:
+        address:
+          type: string
+        channel:
+          enum:
+            - EMAIL
+            - CHAT
+            - WEBHOOK
+            - IN_APP
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        detail:
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        reason:
+          type: string
+      type: object
+info:
+  description: |
+    Submit notification requests, inspect delivery history, and manage
+    recipient contact records, preferences and the suppression list.
+
+    Errors are RFC 9457 problem documents. Branch on `code`, which is
+    stable; `detail` is localized from the caller's Accept-Language and
+    is written for a human.
+  title: Notification service
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/announcements:
+    get:
+      description: Newest first, dismissed ones excluded, and only those inside their visibility window. Visibility is resolved from the caller's CURRENT roles on every request, so a revoked role stops granting it immediately. Supports $filter/$orderby/$top/$skip over the published surface - the audience is deliberately not filterable.
+      operationId: list_2
+      parameters:
+        - in: query
+          name: options
+          required: true
+          schema:
+            $ref: "#/components/schemas/ODataQueryOptions"
+        - description: OData filter expression, e.g. price lt 100 and category/code eq 'TOOLS'. Which properties may appear is decided by the entity's policy.
+          in: query
+          name: $filter
+          required: false
+          schema:
+            type: string
+        - description: Ordering clause, e.g. name desc, createdAt asc. The server appends its own tie-breaker so that paging stays deterministic.
+          in: query
+          name: $orderby
+          required: false
+          schema:
+            type: string
+        - description: Page size. Capped by the endpoint's maximum.
+          in: query
+          name: $top
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Absolute row offset. Need not be a multiple of $top; the response reports the offset that was applied.
+          in: query
+          name: $skip
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Whether to compute the total. Defaults to true; pass false to skip the count query, and the response then carries no total.
+          in: query
+          name: $count
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PageResponseAnnouncement"
+          description: OK
+      summary: List the announcements addressed to the caller
+      tags:
+        - Announcements
+    post:
+      description: The category decides the class and the channels - the request cannot. Returns 201 with the announcement, which is already visible if its window has opened. Where the category includes EMAIL, emailRunId names the fan-out operation to poll.
+      operationId: publish
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishAnnouncementRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/AnnouncementAdmin"
+          description: OK
+      summary: Publish an announcement
+      tags:
+        - Announcement administration
+  /api/v1/announcements/outstanding-count:
+    get:
+      description: Returns no content. Dismissed announcements are not counted. Separate from the inbox count because the two feeds are separate; summing them is the client's decision.
+      operationId: outstandingCount
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/AnnouncementSummary"
+          description: OK
+      summary: Count the caller's outstanding announcements
+      tags:
+        - Announcements
+  /api/v1/announcements/{id}:
+    get:
+      description: In the caller's own language, falling back to the deployment default. Includes announcements the caller has dismissed, because dismissing is not deleting. Answers 404 both when the announcement does not exist and when it is not addressed to this caller - the two are deliberately indistinguishable, so that a status code cannot be used to map which roles the platform addresses.
+      operationId: get_3
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/Announcement"
+          description: OK
+      summary: Read one announcement
+      tags:
+        - Announcements
+  /api/v1/announcements/{id}/corrections:
+    post:
+      description: Re-renders every supported locale together, so the languages cannot drift apart. Dismissals are preserved - a typo fix does not un-dismiss anything. The audience and window cannot be changed.
+      operationId: correct
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishAnnouncementRequest"
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/AnnouncementAdmin"
+          description: OK
+      summary: Correct a published announcement's content
+      tags:
+        - Announcement administration
+  /api/v1/announcements/{id}/dismiss:
+    post:
+      description: "For this caller alone; everybody else still sees it. Writes one row, and only on the first dismissal. Idempotent: a repeat leaves the original instant alone. Still retrievable by id afterwards."
+      operationId: dismiss_1
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/Announcement"
+          description: OK
+      summary: Dismiss one announcement
+      tags:
+        - Announcements
+  /api/v1/announcements/{id}/email-run:
+    get:
+      description: Progress while it runs, terminal when it has finished. The total is nullable until the audience has been walked, because counting a hundred thousand rows up front would delay the first send to produce a number nobody is waiting for.
+      operationId: emailRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+          description: OK
+      summary: Poll an announcement's email fan-out
+      tags:
+        - Announcement administration
+  /api/v1/announcements/{id}/email-run/cancellation:
+    post:
+      description: Answers 202 because the stop is requested, not performed. Deliveries already created are NOT recalled; the envelope reports how many there were. Cancelling a finished run returns its envelope rather than a 409.
+      operationId: cancelEmailRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+          description: OK
+      summary: Cancel an announcement's email fan-out
+      tags:
+        - Announcement administration
+  /api/v1/filter-metadata/{entity}:
+    get:
+      operationId: metadata
+      parameters:
+        - in: path
+          name: entity
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/FilterMetadata"
+          description: OK
+      tags:
+        - filter-metadata-controller
+  /api/v1/inbox:
+    get:
+      description: Newest first, dismissed items excluded. Supports $filter/$orderby/$top/$skip over the published surface. Bodies are omitted - fetch a single item to read one.
+      operationId: list_1
+      parameters:
+        - in: query
+          name: options
+          required: true
+          schema:
+            $ref: "#/components/schemas/ODataQueryOptions"
+        - description: OData filter expression, e.g. price lt 100 and category/code eq 'TOOLS'. Which properties may appear is decided by the entity's policy.
+          in: query
+          name: $filter
+          required: false
+          schema:
+            type: string
+        - description: Ordering clause, e.g. name desc, createdAt asc. The server appends its own tie-breaker so that paging stays deterministic.
+          in: query
+          name: $orderby
+          required: false
+          schema:
+            type: string
+        - description: Page size. Capped by the endpoint's maximum.
+          in: query
+          name: $top
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Absolute row offset. Need not be a multiple of $top; the response reports the offset that was applied.
+          in: query
+          name: $skip
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Whether to compute the total. Defaults to true; pass false to skip the count query, and the response then carries no total.
+          in: query
+          name: $count
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PageResponseInboxItem"
+          description: OK
+      summary: List the caller's notifications
+      tags:
+        - Inbox
+  /api/v1/inbox/read:
+    post:
+      description: "Reports how many items moved. Safe to repeat: a second call reports zero rather than failing."
+      operationId: markAllRead
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxSummary"
+          description: OK
+      summary: Mark every unread notification read
+      tags:
+        - Inbox
+  /api/v1/inbox/unread-count:
+    get:
+      description: Returns no content, for rendering an unread badge. Dismissed items are not counted as unread.
+      operationId: unreadCount
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxSummary"
+          description: OK
+      summary: Count the caller's unread notifications
+      tags:
+        - Inbox
+  /api/v1/inbox/{id}:
+    get:
+      description: Includes the rendered body. Answers 404 both when the item does not exist and when it belongs to somebody else - the two are deliberately indistinguishable, so that a status code cannot confirm another person's notification exists.
+      operationId: get_2
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxItem"
+          description: OK
+      summary: Read one notification
+      tags:
+        - Inbox
+  /api/v1/inbox/{id}/dismiss:
+    post:
+      description: Removes it from the default list without marking it read - the recipient dealt with it rather than opening it. Still retrievable by id. Idempotent.
+      operationId: dismiss
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxItem"
+          description: OK
+      summary: Dismiss one notification
+      tags:
+        - Inbox
+  /api/v1/inbox/{id}/read:
+    post:
+      description: "Also marks it seen if it was not already. Idempotent: a repeat leaves the original instant alone, which matters because that instant is what the retention window is measured from."
+      operationId: markRead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxItem"
+          description: OK
+      summary: Mark one notification read
+      tags:
+        - Inbox
+  /api/v1/inbox/{id}/seen:
+    post:
+      description: "Records that it was shown in a list, which is not the same as having been opened. Idempotent: a repeat leaves the original instant alone."
+      operationId: markSeen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxItem"
+          description: OK
+      summary: Mark one notification seen
+      tags:
+        - Inbox
+  /api/v1/notifications:
+    post:
+      description: Fans the request out into one delivery per recipient per channel. Supply Idempotency-Key to make a retry safe.
+      operationId: submit
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNotificationRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/NotificationRequestResponse"
+          description: OK
+      summary: Submit a notification request
+      tags:
+        - Notifications
+  /api/v1/notifications/batch:
+    post:
+      description: For callers replacing a message producer. Each item is submitted independently and reported independently; the response is always 200 and carries a per-item outcome.
+      operationId: submitBatch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchSendRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/BatchSendResponse"
+          description: OK
+      summary: Submit several notification requests
+      tags:
+        - Notifications
+  /api/v1/notifications/deliveries:
+    get:
+      description: OData $filter/$orderby/$top/$skip over non-PII delivery columns.
+      operationId: search
+      parameters:
+        - in: query
+          name: options
+          required: true
+          schema:
+            $ref: "#/components/schemas/ODataQueryOptions"
+        - description: OData filter expression, e.g. price lt 100 and category/code eq 'TOOLS'. Which properties may appear is decided by the entity's policy.
+          in: query
+          name: $filter
+          required: false
+          schema:
+            type: string
+        - description: Ordering clause, e.g. name desc, createdAt asc. The server appends its own tie-breaker so that paging stays deterministic.
+          in: query
+          name: $orderby
+          required: false
+          schema:
+            type: string
+        - description: Page size. Capped by the endpoint's maximum.
+          in: query
+          name: $top
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Absolute row offset. Need not be a multiple of $top; the response reports the offset that was applied.
+          in: query
+          name: $skip
+          required: false
+          schema:
+            format: int32
+            type: integer
+        - description: Whether to compute the total. Defaults to true; pass false to skip the count query, and the response then carries no total.
+          in: query
+          name: $count
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PageResponseDeliveryResponse"
+          description: OK
+      summary: Search delivery history
+      tags:
+        - Delivery administration
+  /api/v1/notifications/deliveries/{id}:
+    get:
+      operationId: get_1
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+          description: OK
+      summary: Read one delivery
+      tags:
+        - Delivery administration
+  /api/v1/notifications/deliveries/{id}/cancel:
+    post:
+      operationId: cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+          description: OK
+      summary: Cancel a delivery that has not been sent
+      tags:
+        - Delivery administration
+  /api/v1/notifications/deliveries/{id}/content:
+    get:
+      description: Audited. Subject to the content retention window - 410 once it has passed.
+      operationId: content
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/DeliveryContentResponse"
+          description: OK
+      summary: Read a delivery's rendered body
+      tags:
+        - Delivery administration
+  /api/v1/notifications/deliveries/{id}/history:
+    get:
+      description: Every transition, oldest first - how long it waited, how often it failed, and why it ended where it did.
+      operationId: history
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                items:
+                  $ref: "#/components/schemas/DeliveryTransitionResponse"
+                type: array
+          description: OK
+      summary: Read a delivery's status trail
+      tags:
+        - Delivery administration
+  /api/v1/notifications/deliveries/{id}/retry:
+    post:
+      description: Resets the attempt counter, because a retry follows a fix to the cause.
+      operationId: retry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+          description: OK
+      summary: Requeue a DEAD delivery
+      tags:
+        - Delivery administration
+  /api/v1/notifications/preview:
+    post:
+      description: Renders through the same resolver and the same strictness as a live send, so a preview that succeeds guarantees the send would.
+      operationId: preview
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderPreviewRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/RenderPreviewResponse"
+          description: OK
+      summary: Preview a rendered template
+      tags:
+        - Notifications
+  /api/v1/notifications/receipts:
+    post:
+      description: |
+        Authenticated by an HMAC over '<timestamp>.<body>' in X-Provider-Signature, with
+        the epoch-second timestamp in X-Provider-Timestamp. Advances the delivery and, for
+        a bounce or a complaint, suppresses the address.
+
+        Body: {"channel":"EMAIL","providerMessageId":"<id>","outcome":"DELIVERED|BOUNCED|
+        DEFERRED|COMPLAINED","occurredAt":"<ISO-8601, optional>","detail":"<optional>"}
+      operationId: receive
+      parameters:
+        - in: header
+          name: X-Provider-Signature
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Provider-Timestamp
+          required: false
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+        required: true
+      responses:
+        "200":
+          description: OK
+      summary: Accept a provider delivery receipt
+      tags:
+        - Delivery receipts
+  /api/v1/notifications/suppressions:
+    delete:
+      description: "Admin only: this makes the service send to an address something previously judged undeliverable."
+      operationId: release
+      parameters:
+        - in: query
+          name: channel
+          required: true
+          schema:
+            enum:
+              - EMAIL
+              - CHAT
+              - WEBHOOK
+              - IN_APP
+            type: string
+        - in: query
+          name: address
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+      summary: Release a suppression
+      tags:
+        - Suppression list
+    get:
+      description: Addresses are masked.
+      operationId: list
+      parameters:
+        - in: query
+          name: channel
+          required: true
+          schema:
+            enum:
+              - EMAIL
+              - CHAT
+              - WEBHOOK
+              - IN_APP
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                items:
+                  $ref: "#/components/schemas/SuppressionResponse"
+                type: array
+          description: OK
+      summary: List active suppressions for a channel
+      tags:
+        - Suppression list
+    post:
+      description: Omit expiresAt for a permanent suppression - the right choice for a complaint, the wrong one for a full mailbox.
+      operationId: suppress
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuppressionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/SuppressionResponse"
+          description: OK
+      summary: Suppress a destination
+      tags:
+        - Suppression list
+  /api/v1/notifications/{id}:
+    get:
+      description: The request's state and every delivery it fanned out into. This is the resource the Location header of a 202 refers to.
+      operationId: get
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/NotificationRequestResponse"
+          description: OK
+      summary: Read a submitted request
+      tags:
+        - Notifications
+tags:
+  - description: Provider callbacks - HMAC authenticated
+    name: Delivery receipts
+  - description: Submit notification requests and preview templates
+    name: Notifications
+  - description: Publish and correct platform announcements
+    name: Announcement administration
+  - description: Platform announcements addressed to the caller
+    name: Announcements
+  - description: The caller's own in-product notifications
+    name: Inbox
+  - description: Destinations that will not be written to
+    name: Suppression list
+  - description: Inspect delivery history, retry and cancel
+    name: Delivery administration
